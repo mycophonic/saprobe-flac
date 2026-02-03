@@ -1,4 +1,20 @@
-package saprobe_flac
+/*
+   Copyright Mycophonic.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+package flac
 
 import (
 	"encoding/binary"
@@ -9,7 +25,6 @@ import (
 	goflac "github.com/mewkiz/flac"
 	"github.com/mewkiz/flac/frame"
 	"github.com/mewkiz/flac/meta"
-
 )
 
 var errPCMLengthMismatch = errors.New("pcm length is not a multiple of frame size")
@@ -47,13 +62,19 @@ func Encode(writer io.Writer, pcm []byte, format PCMFormat) error {
 		return fmt.Errorf("creating encoder: %w", err)
 	}
 
+	// Pre-allocate per-channel buffers at max block size; reused across frames.
+	channels := make([][]int32, nChannels)
+	for ch := range channels {
+		channels[ch] = make([]int32, defaultBlockSize)
+	}
+
 	remaining := totalSamples
 	offset := 0
 
 	for remaining > 0 {
 		blockSamples := min(remaining, defaultBlockSize)
 
-		channels := deinterleave(pcm, offset, blockSamples, nChannels, format.BitDepth)
+		deinterleave(channels, pcm, offset, blockSamples, nChannels, format.BitDepth)
 		offset += blockSamples * frameSize
 		remaining -= blockSamples
 
@@ -71,14 +92,14 @@ func Encode(writer io.Writer, pcm []byte, format PCMFormat) error {
 	return nil
 }
 
-// deinterleave reads interleaved little-endian signed PCM bytes and returns
-// per-channel int32 sample slices. It is the inverse of interleave in decode.go.
+// deinterleave reads interleaved little-endian signed PCM bytes into pre-allocated
+// per-channel int32 slices. It is the inverse of interleave in decode.go.
 //
 //nolint:varnamelen // Loop variables i, ch, s are idiomatic.
-func deinterleave(pcm []byte, offset, blockSize, nChannels int, depth BitDepth) [][]int32 {
-	channels := make([][]int32, nChannels)
+func deinterleave(channels [][]int32, pcm []byte, offset, blockSize, nChannels int, depth BitDepth) {
+	// Reslice to exact block size (channels were allocated at max block size).
 	for ch := range channels {
-		channels[ch] = make([]int32, blockSize)
+		channels[ch] = channels[ch][:blockSize]
 	}
 
 	pos := offset
@@ -124,8 +145,6 @@ func deinterleave(pcm []byte, offset, blockSize, nChannels int, depth BitDepth) 
 	default:
 		panic(fmt.Sprintf("flac: deinterleave called with unsupported bit depth %d", depth))
 	}
-
-	return channels
 }
 
 // buildFrame constructs a FLAC frame from per-channel int32 samples.

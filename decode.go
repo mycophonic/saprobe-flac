@@ -1,4 +1,20 @@
-package saprobe_flac
+/*
+   Copyright Mycophonic.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+package flac
 
 import (
 	"encoding/binary"
@@ -165,6 +181,8 @@ func Decode(rs io.ReadSeeker) ([]byte, PCMFormat, error) {
 // Stereo paths use packed writes (PutUint32/PutUint64) to emit both channels per store
 // instruction, with bounds-check elimination (BCE) hints so the compiler removes all
 // per-iteration bounds checks from the inner loop.
+//
+//revive:disable-next-line:cognitive-complexity // single switch over 5 bit-depth groups × stereo/multi paths; splitting hurts readability.
 func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels int, depth BitDepth) {
 	switch depth {
 	case Depth4, Depth8:
@@ -183,6 +201,7 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 
 			for i := range blockSize {
 				for ch := range nChannels {
+					//nolint:gosec // G115: intentional int32→int8 truncation for 4/8-bit PCM sign extension.
 					dst[pos] = byte(
 						int8(subframes[ch].Samples[i]),
 					)
@@ -199,6 +218,7 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 
 			for i, l := range left {
 				r := right[i]
+				//nolint:gosec // G115: intentional int32→uint16 truncation for 12/16-bit stereo PCM packing.
 				binary.LittleEndian.PutUint32(dst[i*4:], uint32(uint16(l))|uint32(uint16(r))<<16)
 			}
 		} else {
@@ -220,16 +240,20 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 			right := subframes[1].Samples[:blockSize:blockSize]
 			_ = dst[blockSize*6-1] // BCE
 
-			for i, l := range left {
-				r := right[i]
+			for i, lSample := range left {
+				rSample := right[i]
 				off := i * 6
 				// Pack first sample's 24 bits + second sample's low byte into one uint32.
+				//nolint:gosec // G115: intentional int32→uint8 truncation for 20/24-bit stereo PCM packing.
 				binary.LittleEndian.PutUint32(
 					dst[off:],
-					uint32(uint8(l))|uint32(uint8(l>>8))<<8|uint32(uint8(l>>16))<<16|uint32(uint8(r))<<24,
+					uint32(uint8(lSample))|
+						uint32(uint8(lSample>>8))<<8|
+						uint32(uint8(lSample>>16))<<16|
+						uint32(uint8(rSample))<<24,
 				)
-				dst[off+4] = byte(r >> 8)
-				dst[off+5] = byte(r >> 16)
+				dst[off+4] = byte(rSample >> 8)
+				dst[off+5] = byte(rSample >> 16)
 			}
 		} else {
 			pos := 0
@@ -252,6 +276,7 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 
 			for i, l := range left {
 				r := right[i]
+				//nolint:gosec // G115: intentional int32→uint32 reinterpretation for 32-bit stereo PCM packing.
 				binary.LittleEndian.PutUint64(dst[i*8:], uint64(uint32(l))|uint64(uint32(r))<<32)
 			}
 		} else {
