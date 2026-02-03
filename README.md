@@ -2,8 +2,7 @@
 
 Pure Go FLAC streaming decoder and encoder.
 
-Thin layer over a [fork](https://github.com/mycophonic/flac) of [mewkiz/flac](https://github.com/mewkiz/flac),
-providing our standard PCM API.
+Thin layer over a [fork](https://github.com/mycophonic/flac) of [mewkiz/flac](https://github.com/mewkiz/flac), providing our standard PCM API, along with a raft of optimizations.
 
 An example cli decoder is provided.
 
@@ -46,6 +45,6 @@ Other dependencies (agar) are purely for test tooling.
 
 ## Detailed documentation
 
-* [FLAC format notes](./docs/FLAC.md)
 * [decoders landscape](./docs/research/DECODERS.md)
 * [encoders landscape](./docs/research/ENCODERS.md)
+* [tests and benchmarks](./docs/QA.md)

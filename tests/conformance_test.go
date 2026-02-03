@@ -21,10 +21,10 @@ var conformanceRepo = flag.String(
 
 const conformanceRepoURL = "https://github.com/ietf-wg-cellar/flac-test-files.git"
 
-// TestFLACConformance runs the IETF FLAC decoder testbench against three decoders:
+// TestIETFConformance runs the IETF FLAC decoder testbench against three decoders:
 // the reference flac binary, ffmpeg, and saprobe. Subset files must decode identically
 // across all three. Uncommon files are best-effort. Faulty files must not crash.
-func TestFLACConformance(t *testing.T) {
+func TestIETFConformance(t *testing.T) {
 	t.Parallel()
 
 	repoPath := ensureConformanceRepo(t)
@@ -39,12 +39,12 @@ func TestFLACConformance(t *testing.T) {
 	t.Run("subset", func(t *testing.T) {
 		t.Parallel()
 
-		files := discoverFlacFiles(t, filepath.Join(repoPath, "subset"))
+		files := discoverFiles(t, filepath.Join(repoPath, "subset"))
 		for _, path := range files {
 			t.Run(filepath.Base(path), func(t *testing.T) {
 				t.Parallel()
 
-				props := probeFlacFile(t, path)
+				props := probeFile(t, path)
 
 				runSubsetTest(t, path, props, flacBin, ffmpegBinErr)
 			})
@@ -54,7 +54,7 @@ func TestFLACConformance(t *testing.T) {
 	t.Run("uncommon", func(t *testing.T) {
 		t.Parallel()
 
-		files := discoverFlacFiles(t, filepath.Join(repoPath, "uncommon"))
+		files := discoverFiles(t, filepath.Join(repoPath, "uncommon"))
 		for _, path := range files {
 			t.Run(filepath.Base(path), func(t *testing.T) {
 				t.Parallel()
@@ -67,7 +67,7 @@ func TestFLACConformance(t *testing.T) {
 	t.Run("faulty", func(t *testing.T) {
 		t.Parallel()
 
-		files := discoverFlacFiles(t, filepath.Join(repoPath, "faulty"))
+		files := discoverFiles(t, filepath.Join(repoPath, "faulty"))
 		for _, path := range files {
 			t.Run(filepath.Base(path), func(t *testing.T) {
 				t.Parallel()
@@ -78,13 +78,13 @@ func TestFLACConformance(t *testing.T) {
 	})
 }
 
-// conformanceFlacProps holds ffprobe-derived properties for a conformance test file.
-type conformanceFlacProps struct {
+// conformanceProps holds ffprobe-derived properties for a conformance test file.
+type conformanceProps struct {
 	bitDepth int
 	channels int
 }
 
-func probeFlacFile(t *testing.T, path string) conformanceFlacProps {
+func probeFile(t *testing.T, path string) conformanceProps {
 	t.Helper()
 
 	result, err := agar.FFProbe(path)
@@ -97,15 +97,15 @@ func probeFlacFile(t *testing.T, path string) conformanceFlacProps {
 		t.Fatalf("ffprobe %s: %v", filepath.Base(path), streamErr)
 	}
 
-	return conformanceFlacProps{
+	return conformanceProps{
 		bitDepth: stream.BitDepth(),
 		channels: stream.Channels,
 	}
 }
 
-// flacBinaryRawSupported reports whether the reference flac binary can produce
+// flacBinRawSupported reports whether the reference flac binary can produce
 // raw PCM output at the given bit depth.
-func flacBinaryRawSupported(bitDepth int) bool {
+func flacBinRawSupported(bitDepth int) bool {
 	switch bitDepth {
 	case 8, 16, 24, 32:
 		return true
@@ -118,20 +118,20 @@ func flacBinaryRawSupported(bitDepth int) bool {
 func runSubsetTest(
 	t *testing.T,
 	path string,
-	props conformanceFlacProps,
+	props conformanceProps,
 	flacBin string,
 	ffmpegBinErr error,
 ) {
 	t.Helper()
 
-	saprobePCM, _, saprobeErr := decodeFlacFile(path)
+	saprobePCM, _, saprobeErr := decodeSaprobe(path)
 	if saprobeErr != nil {
 		t.Fatalf("saprobe decode: %v", saprobeErr)
 	}
 
 	var refPCM []byte
 
-	if !flacBinaryRawSupported(props.bitDepth) {
+	if !flacBinRawSupported(props.bitDepth) {
 		t.Logf("skipping flac binary comparison: --force-raw-format does not support %d-bit output", props.bitDepth)
 	} else {
 		var err error
@@ -152,7 +152,7 @@ func runSubsetTest(
 		return
 	}
 
-	if !flacBinaryRawSupported(props.bitDepth) {
+	if !flacBinRawSupported(props.bitDepth) {
 		t.Logf("skipping ffmpeg comparison: no native raw PCM format for %d-bit output", props.bitDepth)
 
 		return
@@ -212,7 +212,7 @@ func runUncommonTest(t *testing.T, path, flacBin string) {
 			}
 		}()
 
-		saprobePCM, _, saprobeErr = decodeFlacFile(path)
+		saprobePCM, _, saprobeErr = decodeSaprobe(path)
 	}()
 
 	if didPanic {
@@ -257,7 +257,7 @@ func runFaultyTest(t *testing.T, path string) {
 			}
 		}()
 
-		_, _, decodeErr = decodeFlacFile(path)
+		_, _, decodeErr = decodeSaprobe(path)
 	}()
 
 	switch {
@@ -297,7 +297,7 @@ func reportPCMDiff(t *testing.T, label string, got, want []byte, bitDepth, chann
 		return
 	}
 
-	bytesPerSample := pcmBytesPerSample(bitDepth)
+	bytesPerSample := agar.PCMBytesPerSample(bitDepth)
 	frameSize := bytesPerSample * channels
 	sampleIdx := firstDiff / frameSize
 
@@ -331,7 +331,7 @@ func ensureConformanceRepo(t *testing.T) string {
 		return *conformanceRepo
 	}
 
-	repoDir := filepath.Join(projectRoot(t), "bin", "flac-test-files")
+	repoDir := filepath.Join(agar.ProjectRoot(t), "bin", "flac-test-files")
 
 	conformanceOnce.Do(func() {
 		if info, err := os.Stat(filepath.Join(repoDir, "subset")); err == nil && info.IsDir() {

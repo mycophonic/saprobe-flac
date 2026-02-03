@@ -11,20 +11,20 @@ import (
 	flac "github.com/mycophonic/saprobe-flac"
 )
 
-// flacEncoderType identifies a FLAC encoder.
-type flacEncoderType int
+// encoderType identifies a FLAC encoder.
+type encoderType int
 
 const (
-	encoderSaprobe flacEncoderType = iota
+	encoderSaprobe encoderType = iota
 	encoderFlacBinary
 	encoderFFmpeg
 )
 
-// flacDecoderType identifies a FLAC decoder.
-type flacDecoderType int
+// decoderType identifies a FLAC decoder.
+type decoderType int
 
 const (
-	decoderSaprobe flacDecoderType = iota
+	decoderSaprobe decoderType = iota
 	decoderFlacBinary
 	decoderFFmpeg
 )
@@ -32,47 +32,47 @@ const (
 // All encodable FLAC bit depths (4-bit excluded: no frame header bit pattern in FLAC spec).
 //
 //nolint:gochecknoglobals
-var allFlacBitDepths = []int{8, 12, 16, 20, 24, 32}
+var bitDepths = []int{8, 12, 16, 20, 24, 32}
 
-// flacSampleRates covers the full range of commonly used sample rates.
+// sampleRates covers the full range of commonly used sample rates.
 //
 //nolint:gochecknoglobals
-var flacSampleRates = []int{
+var sampleRates = []int{
 	8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000,
 }
 
-// flacChannelCounts covers all FLAC-supported channel counts (1 through 8).
+// channelCounts covers all FLAC-supported channel counts (1 through 8).
 //
 //nolint:gochecknoglobals
-var flacChannelCounts = []int{1, 2, 3, 4, 5, 6, 7, 8}
+var channelCounts = []int{1, 2, 3, 4, 5, 6, 7, 8}
 
 // encodersForBitDepth returns which encoders support the given bit depth.
-func encodersForBitDepth(bitDepth int) []flacEncoderType {
+func encodersForBitDepth(bitDepth int) []encoderType {
 	switch bitDepth {
 	case 12, 20:
-		return []flacEncoderType{encoderSaprobe}
+		return []encoderType{encoderSaprobe}
 	case 8, 32:
-		return []flacEncoderType{encoderSaprobe, encoderFlacBinary}
+		return []encoderType{encoderSaprobe, encoderFlacBinary}
 	case 16, 24:
-		return []flacEncoderType{encoderSaprobe, encoderFlacBinary, encoderFFmpeg}
+		return []encoderType{encoderSaprobe, encoderFlacBinary, encoderFFmpeg}
 	default:
 		return nil
 	}
 }
 
 // decodersForBitDepth returns which decoders support the given bit depth.
-func decodersForBitDepth(bitDepth int) []flacDecoderType {
+func decodersForBitDepth(bitDepth int) []decoderType {
 	switch bitDepth {
 	case 12, 20:
-		return []flacDecoderType{decoderSaprobe}
+		return []decoderType{decoderSaprobe}
 	case 8, 16, 24, 32:
-		return []flacDecoderType{decoderSaprobe, decoderFlacBinary, decoderFFmpeg}
+		return []decoderType{decoderSaprobe, decoderFlacBinary, decoderFFmpeg}
 	default:
 		return nil
 	}
 }
 
-func encoderName(enc flacEncoderType) string {
+func encoderName(enc encoderType) string {
 	switch enc {
 	case encoderSaprobe:
 		return "saprobe"
@@ -85,7 +85,7 @@ func encoderName(enc flacEncoderType) string {
 	}
 }
 
-func decoderName(dec flacDecoderType) string {
+func decoderName(dec decoderType) string {
 	switch dec {
 	case decoderSaprobe:
 		return "saprobe"
@@ -116,19 +116,19 @@ func ffmpegMultichannelFails(bitDepth, channels int) bool {
 	}
 }
 
-// TestFLACDecode tests all bit depth x encoder x sample rate x channel combinations.
-func TestFLACDecode(t *testing.T) {
+// TestConformance tests all bit depth x encoder x sample rate x channel combinations.
+func TestConformance(t *testing.T) {
 	t.Parallel()
 
 	flacBin, flacBinErr := agar.LookFor("flac")
 
-	for _, bitDepth := range allFlacBitDepths {
+	for _, bitDepth := range bitDepths {
 		encoders := encodersForBitDepth(bitDepth)
 		decoders := decodersForBitDepth(bitDepth)
 
 		for _, enc := range encoders {
-			for _, sampleRate := range flacSampleRates {
-				for _, channels := range flacChannelCounts {
+			for _, sampleRate := range sampleRates {
+				for _, channels := range channelCounts {
 					name := fmt.Sprintf(
 						"%dbit/%s/%dHz_%dch",
 						bitDepth, encoderName(enc), sampleRate, channels,
@@ -141,7 +141,7 @@ func TestFLACDecode(t *testing.T) {
 							t.Skip("standalone flac binary not found")
 						}
 
-						runFlacTest(t, enc, decoders, flacBin, bitDepth, sampleRate, channels)
+						runConformanceTest(t, enc, decoders, flacBin, bitDepth, sampleRate, channels)
 					})
 				}
 			}
@@ -150,17 +150,17 @@ func TestFLACDecode(t *testing.T) {
 }
 
 //nolint:cyclop // Test orchestration requires many steps.
-func runFlacTest(
+func runConformanceTest(
 	t *testing.T,
-	enc flacEncoderType,
-	decoders []flacDecoderType,
+	enc encoderType,
+	decoders []decoderType,
 	flacBin string,
 	bitDepth, sampleRate, channels int,
 ) {
 	t.Helper()
 
 	tmpDir := t.TempDir()
-	srcPCM := generateWhiteNoise(sampleRate, bitDepth, channels, 1)
+	srcPCM := agar.GenerateWhiteNoise(sampleRate, bitDepth, channels, 1)
 	srcPath := filepath.Join(tmpDir, "source.raw")
 
 	if err := os.WriteFile(srcPath, srcPCM, 0o600); err != nil {
@@ -172,7 +172,7 @@ func runFlacTest(
 	// Encode with the selected encoder.
 	switch enc {
 	case encoderSaprobe:
-		if err := saprobeFlacEncode(srcPCM, encPath, bitDepth, sampleRate, channels); err != nil {
+		if err := encodeSaprobe(srcPCM, encPath, bitDepth, sampleRate, channels); err != nil {
 			t.Fatalf("saprobe encode: %v", err)
 		}
 	case encoderFlacBinary:
@@ -219,11 +219,11 @@ func runFlacTest(
 		}
 
 		decName := decoderName(dec)
-		pcm, format := runFlacDecode(t, dec, flacBin, encPath, bitDepth, channels)
+		pcm, format := runDecode(t, dec, flacBin, encPath, bitDepth, channels)
 
 		// Verify format metadata (saprobe decoder only, others return raw bytes).
 		if dec == decoderSaprobe && format != nil {
-			verifyFlacFormat(t, format, sampleRate, bitDepth, channels)
+			verifyFormat(t, format, sampleRate, bitDepth, channels)
 		}
 
 		// Compare decoded PCM vs original source.
@@ -233,7 +233,7 @@ func runFlacTest(
 			t.Errorf("%s length mismatch: source=%d, decoded=%d", label, len(srcPCM), len(pcm))
 		}
 
-		compareLosslessSamples(t, label, srcPCM, pcm, bitDepth, channels)
+		agar.CompareLosslessSamples(t, label, srcPCM, pcm, bitDepth, channels)
 
 		decoded[decName] = pcm
 	}
@@ -255,14 +255,14 @@ func runFlacTest(
 					label, nameA, len(decoded[nameA]), nameB, len(decoded[nameB]))
 			}
 
-			compareLosslessSamples(t, label, decoded[nameA], decoded[nameB], bitDepth, channels)
+			agar.CompareLosslessSamples(t, label, decoded[nameA], decoded[nameB], bitDepth, channels)
 		}
 	}
 }
 
-func runFlacDecode(
+func runDecode(
 	t *testing.T,
-	dec flacDecoderType,
+	dec decoderType,
 	flacBin, encPath string,
 	bitDepth, channels int,
 ) ([]byte, *flac.PCMFormat) {
@@ -270,7 +270,7 @@ func runFlacDecode(
 
 	switch dec {
 	case decoderSaprobe:
-		pcm, format, err := decodeFlacFile(encPath)
+		pcm, format, err := decodeSaprobe(encPath)
 		if err != nil {
 			t.Fatalf("saprobe decode: %v", err)
 		}
@@ -294,7 +294,7 @@ func runFlacDecode(
 	}
 }
 
-func verifyFlacFormat(t *testing.T, format *flac.PCMFormat, sampleRate, bitDepth, channels int) {
+func verifyFormat(t *testing.T, format *flac.PCMFormat, sampleRate, bitDepth, channels int) {
 	t.Helper()
 
 	if format.SampleRate != sampleRate {

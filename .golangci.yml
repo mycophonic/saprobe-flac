@@ -262,6 +262,8 @@ linters:
             - $all
           allow:
             - $gostd
+            - github.com/mycophonic/saprobe-flac
+            - github.com/mewkiz/flac
             - github.com/mycophonic/agar
 
     staticcheck:
