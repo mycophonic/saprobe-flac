@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"slices"
 
 	goflac "github.com/mewkiz/flac"
@@ -58,6 +59,12 @@ type Decoder struct {
 	buf    []byte
 	bufOff int
 	eof    bool
+
+	// Sample counting for trailing garbage tolerance (e.g. ID3v1 tags appended to FLAC files).
+	// totalSamples is from StreamInfo.NSamples (0 = unknown).
+	// samplesRead tracks inter-channel samples delivered so far.
+	totalSamples uint64
+	samplesRead  uint64
 }
 
 // NewDecoder opens a FLAC stream and returns a streaming decoder.
@@ -83,6 +90,7 @@ func NewDecoder(rs io.ReadSeeker) (*Decoder, error) {
 		nChannels:      nChannels,
 		bytesPerSample: bitDepth.BytesPerSample(),
 		bitDepth:       bitDepth,
+		totalSamples:   info.NSamples,
 		format: PCMFormat{
 			SampleRate: int(info.SampleRate),
 			BitDepth:   bitDepth,
@@ -130,6 +138,24 @@ func (d *Decoder) Read(p []byte) (int, error) { //nolint:varnamelen // p is idio
 		}
 
 		if parseErr != nil {
+			// If we have already delivered all samples declared in StreamInfo,
+			// the parse error is trailing garbage (e.g. ID3v1 tag), not corruption.
+			if d.totalSamples > 0 && d.samplesRead >= d.totalSamples {
+				slog.Warn("flac: ignoring trailing data after all samples decoded",
+					"expected", d.totalSamples,
+					"decoded", d.samplesRead,
+					"error", parseErr,
+				)
+
+				d.eof = true
+
+				if total > 0 {
+					return total, nil
+				}
+
+				return 0, io.EOF
+			}
+
 			return total, fmt.Errorf("%w: %w", ErrReadFailure, parseErr)
 		}
 
@@ -145,6 +171,7 @@ func (d *Decoder) Read(p []byte) (int, error) { //nolint:varnamelen // p is idio
 
 		interleave(d.buf, audioFrame.Subframes, blockSize, d.nChannels, d.bitDepth)
 		d.bufOff = 0
+		d.samplesRead += uint64(blockSize) //nolint:gosec // blockSize is always positive.
 	}
 
 	return total, nil
