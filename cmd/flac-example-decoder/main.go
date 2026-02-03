@@ -35,9 +35,11 @@ import (
 	"github.com/mycophonic/saprobe-flac/version"
 )
 
+const formatWAV = "wav"
+
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
-	format := flag.String("format", "wav", "output format: wav or pcm")
+	outputFormat := flag.String("format", formatWAV, "output format: wav or pcm")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [-format wav|pcm] <input.flac | ->\n", os.Args[0])
@@ -56,15 +58,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *format != "wav" && *format != "pcm" {
-		fmt.Fprintf(os.Stderr, "unknown format %q (use wav or pcm)\n", *format)
+	if *outputFormat != formatWAV && *outputFormat != "pcm" {
+		fmt.Fprintf(os.Stderr, "unknown format %q (use wav or pcm)\n", *outputFormat)
 		os.Exit(1)
 	}
 
-	reader, cleanup, err := openInput(flag.Arg(0))
+	os.Exit(run(*outputFormat, flag.Arg(0)))
+}
+
+func run(outputFormat, inputPath string) int {
+	reader, cleanup, err := openInput(inputPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+
+		return 1
 	}
 
 	defer cleanup()
@@ -72,13 +79,14 @@ func main() {
 	pcm, pcmFormat, err := flac.Decode(reader)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "decode: %v\n", err)
-		os.Exit(1)
+
+		return 1
 	}
 
 	fmt.Fprintf(os.Stderr, "%d Hz, %d-bit, %d ch, %d bytes PCM\n",
 		pcmFormat.SampleRate, pcmFormat.BitDepth, pcmFormat.Channels, len(pcm))
 
-	if *format == "wav" {
+	if outputFormat == formatWAV {
 		err = writeWAV(os.Stdout, pcm, pcmFormat)
 	} else {
 		_, err = os.Stdout.Write(pcm)
@@ -86,8 +94,11 @@ func main() {
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "write: %v\n", err)
-		os.Exit(1)
+
+		return 1
 	}
+
+	return 0
 }
 
 // openInput returns a ReadSeeker for the given path, or buffers stdin when path is "-".
@@ -101,29 +112,32 @@ func openInput(path string) (io.ReadSeeker, func(), error) {
 		return bytes.NewReader(data), func() {}, nil
 	}
 
-	f, err := os.Open(path)
+	file, err := os.Open(path)
 	if err != nil {
-		return nil, func() {}, err
+		return nil, func() {}, fmt.Errorf("opening %s: %w", path, err)
 	}
 
-	return f, func() { f.Close() }, nil
+	return file, func() { _ = file.Close() }, nil
 }
 
-// writeWAV writes a standard PCM WAV to w.
-func writeWAV(w io.Writer, pcm []byte, format flac.PCMFormat) error {
-	bytesPerSample := int(format.BitDepth.BytesPerSample())
-	blockAlign := int(format.Channels) * bytesPerSample
-	byteRate := format.SampleRate * blockAlign
+// writeWAV writes a standard PCM WAV to writer.
+func writeWAV(writer io.Writer, pcm []byte, pcmFmt flac.PCMFormat) error {
+	bytesPerSample := pcmFmt.BitDepth.BytesPerSample()
+	blockAlign := int(pcmFmt.Channels) * bytesPerSample
+	byteRate := pcmFmt.SampleRate * blockAlign
 	dataSize := len(pcm)
 
-	bitsPerSample := int(format.BitDepth)
+	bitsPerSample := int(pcmFmt.BitDepth)
 	// WAV uses container bit depth (e.g., 20-bit stored in 24-bit = bitsPerSample 24).
-	if bitsPerSample == 20 {
-		bitsPerSample = 24
-	} else if bitsPerSample == 12 {
-		bitsPerSample = 16
-	} else if bitsPerSample == 4 {
-		bitsPerSample = 8
+	switch bitsPerSample {
+	case int(flac.Depth20):
+		bitsPerSample = int(flac.Depth24)
+	case int(flac.Depth12):
+		bitsPerSample = int(flac.Depth16)
+	case int(flac.Depth4):
+		bitsPerSample = int(flac.Depth8)
+	default:
+		// No adjustment needed for standard depths.
 	}
 
 	var hdr [44]byte
@@ -135,8 +149,8 @@ func writeWAV(w io.Writer, pcm []byte, format flac.PCMFormat) error {
 	copy(hdr[12:16], "fmt ")
 	binary.LittleEndian.PutUint32(hdr[16:20], 16)
 	binary.LittleEndian.PutUint16(hdr[20:22], 1) // PCM
-	binary.LittleEndian.PutUint16(hdr[22:24], uint16(format.Channels))
-	binary.LittleEndian.PutUint32(hdr[24:28], uint32(format.SampleRate))
+	binary.LittleEndian.PutUint16(hdr[22:24], uint16(pcmFmt.Channels))
+	binary.LittleEndian.PutUint32(hdr[24:28], uint32(pcmFmt.SampleRate))
 	binary.LittleEndian.PutUint32(hdr[28:32], uint32(byteRate))
 	binary.LittleEndian.PutUint16(hdr[32:34], uint16(blockAlign))
 	binary.LittleEndian.PutUint16(hdr[34:36], uint16(bitsPerSample))
@@ -144,11 +158,13 @@ func writeWAV(w io.Writer, pcm []byte, format flac.PCMFormat) error {
 	copy(hdr[36:40], "data")
 	binary.LittleEndian.PutUint32(hdr[40:44], uint32(dataSize))
 
-	if _, err := w.Write(hdr[:]); err != nil {
-		return err
+	if _, err := writer.Write(hdr[:]); err != nil {
+		return fmt.Errorf("writing WAV header: %w", err)
 	}
 
-	_, err := w.Write(pcm)
+	if _, err := writer.Write(pcm); err != nil {
+		return fmt.Errorf("writing WAV data: %w", err)
+	}
 
-	return err
+	return nil
 }
