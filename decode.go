@@ -24,8 +24,8 @@ import (
 	"log/slog"
 	"slices"
 
-	goflac "github.com/mewkiz/flac"
-	"github.com/mewkiz/flac/frame"
+	goflac "github.com/mycophonic/flac"
+	"github.com/mycophonic/flac/frame"
 )
 
 //nolint:gochecknoglobals
@@ -184,23 +184,6 @@ func (d *Decoder) Close() error {
 	}
 
 	return nil
-}
-
-// Decode reads a FLAC stream and decodes it to interleaved little-endian signed PCM bytes.
-// Native bit depth is preserved (16-bit FLAC produces s16le, 24-bit produces s24le, etc.).
-func Decode(rs io.ReadSeeker) ([]byte, PCMFormat, error) {
-	dec, err := NewDecoder(rs)
-	if err != nil {
-		return nil, PCMFormat{}, err
-	}
-	defer dec.Close()
-
-	pcm, err := io.ReadAll(dec)
-	if err != nil {
-		return nil, PCMFormat{}, fmt.Errorf("decoding flac: %w", err)
-	}
-
-	return pcm, dec.Format(), nil
 }
 
 // interleave writes decoded subframe samples into dst as interleaved little-endian signed PCM.

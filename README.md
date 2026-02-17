@@ -33,7 +33,6 @@ func (d *Decoder) Read(p []byte) (int, error)
 func (d *Decoder) Format() PCMFormat
 func (d *Decoder) Close() error
 
-func Decode(rs io.ReadSeeker) ([]byte, PCMFormat, error)
 func Encode(writer io.Writer, pcm []byte, format PCMFormat) error
 ```
 

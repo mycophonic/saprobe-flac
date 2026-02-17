@@ -31,19 +31,12 @@ import (
 	flac "github.com/mycophonic/saprobe-flac"
 )
 
-type benchFormat struct {
-	Name       string
-	SampleRate int
-	BitDepth   int
-	Channels   int
-}
-
 //nolint:gochecknoglobals
-var benchFormats = []benchFormat{
-	{"CD 44.1kHz/16bit", 44100, 16, 2},
-	{"HiRes 96kHz/24bit", 96000, 24, 2},
-	{"UltraHiRes 192kHz/24bit", 192000, 24, 2},
-	{"Studio 192kHz/32bit", 192000, 32, 2},
+var benchFormats = []agar.BenchFormat{
+	{Name: "CD 44.1kHz/16bit", SampleRate: 44100, BitDepth: 16, Channels: 2},
+	{Name: "HiRes 96kHz/24bit", SampleRate: 96000, BitDepth: 24, Channels: 2},
+	{Name: "UltraHiRes 192kHz/24bit", SampleRate: 192000, BitDepth: 24, Channels: 2},
+	{Name: "Studio 192kHz/32bit", SampleRate: 192000, BitDepth: 32, Channels: 2},
 }
 
 //nolint:paralleltest // Benchmark must run sequentially for accurate timing.
@@ -59,7 +52,7 @@ func TestBenchmarkEncode(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	var results []benchResult
+	var results []agar.BenchResult
 
 	for _, bf := range benchFormats {
 		t.Logf("=== %s ===", bf.Name)
@@ -85,7 +78,7 @@ func TestBenchmarkEncode(t *testing.T) {
 		}
 	}
 
-	printResults(t, results)
+	agar.PrintResults(t, benchOpts, results)
 }
 
 //nolint:paralleltest // Benchmark must run sequentially for accurate timing.
@@ -101,7 +94,7 @@ func TestBenchmarkDecode(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	var results []benchResult
+	var results []agar.BenchResult
 
 	for _, bf := range benchFormats {
 		t.Logf("=== %s ===", bf.Name)
@@ -118,14 +111,23 @@ func TestBenchmarkDecode(t *testing.T) {
 		results = append(results, benchDecodeSaprobe(t, bf, encPath))
 		results = append(results, benchDecodeFlacBin(t, bf, flacBin, encPath))
 		results = append(results, benchDecodeFFmpeg(t, bf, encPath))
-		results = append(results, benchDecodeCoreAudio(t, bf, encPath))
+
+		// CoreAudio decode (CGO, in-process). CoreAudio does not support 32-bit FLAC.
+		if bf.BitDepth == 16 || bf.BitDepth == 24 {
+			encoded, err := os.ReadFile(encPath)
+			if err != nil {
+				t.Fatalf("read encoded: %v", err)
+			}
+
+			results = append(results, agar.BenchDecodeCoreAudio(t, bf, benchOpts, encoded))
+		}
 	}
 
-	printResults(t, results)
+	agar.PrintResults(t, benchOpts, results)
 }
 
 // encodeForBench encodes raw PCM to FLAC once (no timing), used as setup for decode benchmarks.
-func encodeForBench(srcPCM []byte, dstPath string, bf benchFormat) error {
+func encodeForBench(srcPCM []byte, dstPath string, bf agar.BenchFormat) error {
 	format := flac.PCMFormat{
 		SampleRate: bf.SampleRate,
 		BitDepth:   flac.BitDepth(bf.BitDepth),
@@ -140,7 +142,7 @@ func encodeForBench(srcPCM []byte, dstPath string, bf benchFormat) error {
 	return os.WriteFile(dstPath, buf.Bytes(), 0o600)
 }
 
-func benchEncodeSaprobe(t *testing.T, bf benchFormat, srcPCM []byte, dstPath string) benchResult {
+func benchEncodeSaprobe(t *testing.T, bf agar.BenchFormat, srcPCM []byte, dstPath string) agar.BenchResult {
 	t.Helper()
 
 	format := flac.PCMFormat{
@@ -149,9 +151,9 @@ func benchEncodeSaprobe(t *testing.T, bf benchFormat, srcPCM []byte, dstPath str
 		Channels:   uint(bf.Channels),
 	}
 
-	durations := make([]time.Duration, benchIterations)
+	durations := make([]time.Duration, benchOpts.Iterations)
 
-	for iter := range benchIterations {
+	for iter := range benchOpts.Iterations {
 		var buf bytes.Buffer
 
 		start := time.Now()
@@ -163,7 +165,7 @@ func benchEncodeSaprobe(t *testing.T, bf benchFormat, srcPCM []byte, dstPath str
 		durations[iter] = time.Since(start)
 
 		// Write the last iteration to disk for decode benchmarks.
-		if iter == benchIterations-1 {
+		if iter == benchOpts.Iterations-1 {
 			if err := os.WriteFile(dstPath, buf.Bytes(), 0o600); err != nil {
 				t.Fatalf("write encoded: %v", err)
 			}
@@ -173,15 +175,15 @@ func benchEncodeSaprobe(t *testing.T, bf benchFormat, srcPCM []byte, dstPath str
 		}
 	}
 
-	return computeResult(bf.Name, "saprobe", "encode", durations, len(srcPCM))
+	return agar.ComputeResult(bf, "saprobe", "encode", durations, len(srcPCM))
 }
 
-func benchEncodeFlacBin(t *testing.T, bf benchFormat, flacBin, srcPath, dstPath string) benchResult {
+func benchEncodeFlacBin(t *testing.T, bf agar.BenchFormat, flacBin, srcPath, dstPath string) agar.BenchResult {
 	t.Helper()
 
-	durations := make([]time.Duration, benchIterations)
+	durations := make([]time.Duration, benchOpts.Iterations)
 
-	for iter := range benchIterations {
+	for iter := range benchOpts.Iterations {
 		start := time.Now()
 
 		cmd := exec.Command(flacBin,
@@ -204,10 +206,10 @@ func benchEncodeFlacBin(t *testing.T, bf benchFormat, flacBin, srcPath, dstPath 
 		durations[iter] = time.Since(start)
 	}
 
-	return computeResult(bf.Name, "flac", "encode", durations, agar.FileSize(t, srcPath))
+	return agar.ComputeResult(bf, "flac", "encode", durations, agar.FileSize(t, srcPath))
 }
 
-func benchEncodeFFmpeg(t *testing.T, bf benchFormat, srcPath, dstPath string) benchResult {
+func benchEncodeFFmpeg(t *testing.T, bf agar.BenchFormat, srcPath, dstPath string) agar.BenchResult {
 	t.Helper()
 
 	var sampleFmt string
@@ -221,9 +223,9 @@ func benchEncodeFFmpeg(t *testing.T, bf benchFormat, srcPath, dstPath string) be
 		t.Fatalf("ffmpeg encode: unsupported bit depth %d", bf.BitDepth)
 	}
 
-	durations := make([]time.Duration, benchIterations)
+	durations := make([]time.Duration, benchOpts.Iterations)
 
-	for iter := range benchIterations {
+	for iter := range benchOpts.Iterations {
 		start := time.Now()
 
 		agar.FFmpegEncode(t, agar.FFmpegEncodeOptions{
@@ -235,10 +237,10 @@ func benchEncodeFFmpeg(t *testing.T, bf benchFormat, srcPath, dstPath string) be
 		durations[iter] = time.Since(start)
 	}
 
-	return computeResult(bf.Name, "ffmpeg", "encode", durations, agar.FileSize(t, srcPath))
+	return agar.ComputeResult(bf, "ffmpeg", "encode", durations, agar.FileSize(t, srcPath))
 }
 
-func benchDecodeSaprobe(t *testing.T, bf benchFormat, srcPath string) benchResult {
+func benchDecodeSaprobe(t *testing.T, bf agar.BenchFormat, srcPath string) agar.BenchResult {
 	t.Helper()
 
 	encoded, err := os.ReadFile(srcPath)
@@ -246,28 +248,38 @@ func benchDecodeSaprobe(t *testing.T, bf benchFormat, srcPath string) benchResul
 		t.Fatalf("read encoded: %v", err)
 	}
 
-	durations := make([]time.Duration, benchIterations)
+	durations := make([]time.Duration, benchOpts.Iterations)
+	outBuf := make([]byte, 64*1024)
 
-	for iter := range benchIterations {
+	for iter := range benchOpts.Iterations {
 		start := time.Now()
 
-		_, _, err := flac.Decode(bytes.NewReader(encoded))
-		if err != nil {
-			t.Fatalf("saprobe decode: %v", err)
+		dec, decErr := flac.NewDecoder(bytes.NewReader(encoded))
+		if decErr != nil {
+			t.Fatalf("saprobe decode: %v", decErr)
 		}
+
+		for {
+			_, readErr := dec.Read(outBuf)
+			if readErr != nil {
+				break
+			}
+		}
+
+		dec.Close()
 
 		durations[iter] = time.Since(start)
 	}
 
-	return computeResult(bf.Name, "saprobe", "decode", durations, len(encoded))
+	return agar.ComputeResult(bf, "saprobe", "decode", durations, len(encoded))
 }
 
-func benchDecodeFlacBin(t *testing.T, bf benchFormat, flacBin, srcPath string) benchResult {
+func benchDecodeFlacBin(t *testing.T, bf agar.BenchFormat, flacBin, srcPath string) agar.BenchResult {
 	t.Helper()
 
-	durations := make([]time.Duration, benchIterations)
+	durations := make([]time.Duration, benchOpts.Iterations)
 
-	for iter := range benchIterations {
+	for iter := range benchOpts.Iterations {
 		start := time.Now()
 
 		cmd := exec.Command(flacBin,
@@ -291,15 +303,15 @@ func benchDecodeFlacBin(t *testing.T, bf benchFormat, flacBin, srcPath string) b
 		durations[iter] = time.Since(start)
 	}
 
-	return computeResult(bf.Name, "flac", "decode", durations, agar.FileSize(t, srcPath))
+	return agar.ComputeResult(bf, "flac", "decode", durations, agar.FileSize(t, srcPath))
 }
 
-func benchDecodeFFmpeg(t *testing.T, bf benchFormat, srcPath string) benchResult {
+func benchDecodeFFmpeg(t *testing.T, bf agar.BenchFormat, srcPath string) agar.BenchResult {
 	t.Helper()
 
-	durations := make([]time.Duration, benchIterations)
+	durations := make([]time.Duration, benchOpts.Iterations)
 
-	for iter := range benchIterations {
+	for iter := range benchOpts.Iterations {
 		start := time.Now()
 
 		agar.FFmpegDecode(t, agar.FFmpegDecodeOptions{
@@ -310,38 +322,7 @@ func benchDecodeFFmpeg(t *testing.T, bf benchFormat, srcPath string) benchResult
 		durations[iter] = time.Since(start)
 	}
 
-	return computeResult(bf.Name, "ffmpeg", "decode", durations, agar.FileSize(t, srcPath))
-}
-
-func benchDecodeCoreAudio(t *testing.T, bf benchFormat, srcPath string) benchResult {
-	t.Helper()
-
-	encoded, err := os.ReadFile(srcPath)
-	if err != nil {
-		t.Fatalf("read encoded: %v", err)
-	}
-
-	// Verify CoreAudio decode works before benchmarking.
-	// CoreAudio may not support all formats (e.g. 32-bit FLAC).
-	if _, err := agar.CoreAudioDecode(encoded); err != nil {
-		t.Logf("coreaudio: %v", err)
-
-		return benchResult{}
-	}
-
-	durations := make([]time.Duration, benchIterations)
-
-	for iter := range benchIterations {
-		start := time.Now()
-
-		if _, err := agar.CoreAudioDecode(encoded); err != nil {
-			t.Fatalf("coreaudio decode iter %d: %v", iter, err)
-		}
-
-		durations[iter] = time.Since(start)
-	}
-
-	return computeResult(bf.Name, "coreaudio", "decode", durations, len(encoded))
+	return agar.ComputeResult(bf, "ffmpeg", "decode", durations, agar.FileSize(t, srcPath))
 }
 
 //nolint:paralleltest // Benchmark must run sequentially for accurate timing.
@@ -364,25 +345,35 @@ func TestBenchmarkDecodeFile(t *testing.T) {
 
 	flacBin, flacBinErr := agar.LookFor("flac")
 
-	var results []benchResult
+	var results []agar.BenchResult
 
-	bf := benchFormat{Name: filepath.Base(filePath), Channels: 2}
+	bf := agar.BenchFormat{Name: filepath.Base(filePath), Channels: 2}
 
 	// saprobe decode
-	durations := make([]time.Duration, benchIterations)
+	durations := make([]time.Duration, benchOpts.Iterations)
+	outBuf := make([]byte, 64*1024)
 
-	for iter := range benchIterations {
+	for iter := range benchOpts.Iterations {
 		start := time.Now()
 
-		_, _, decErr := flac.Decode(bytes.NewReader(encoded))
+		dec, decErr := flac.NewDecoder(bytes.NewReader(encoded))
 		if decErr != nil {
 			t.Fatalf("saprobe decode: %v", decErr)
 		}
 
+		for {
+			_, readErr := dec.Read(outBuf)
+			if readErr != nil {
+				break
+			}
+		}
+
+		dec.Close()
+
 		durations[iter] = time.Since(start)
 	}
 
-	results = append(results, computeResult(bf.Name, "saprobe", "decode", durations, len(encoded)))
+	results = append(results, agar.ComputeResult(bf, "saprobe", "decode", durations, len(encoded)))
 
 	// Write to temp for tool-based decoders.
 	tmpFile := filepath.Join(t.TempDir(), "input.flac")
@@ -396,7 +387,9 @@ func TestBenchmarkDecodeFile(t *testing.T) {
 	}
 
 	results = append(results, benchDecodeFFmpeg(t, bf, tmpFile))
-	results = append(results, benchDecodeCoreAudio(t, bf, tmpFile))
 
-	printResults(t, results)
+	// CoreAudio decode (CGO, in-process).
+	results = append(results, agar.BenchDecodeCoreAudio(t, bf, benchOpts, encoded))
+
+	agar.PrintResults(t, benchOpts, results)
 }

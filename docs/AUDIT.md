@@ -123,7 +123,7 @@ Three benchmark tests with 10 iterations each, full statistics (median/mean/stdd
 ### Workflows
 
 **ci.yml** (push/PR to main):
-- **Lint:** Ubuntu 24.04, Go 1.25.6, full `make lint` (golangci-lint, govulncheck, commit validation, license checks, headers, YAML, shell).
+- **Lint:** Ubuntu 24.04, Go 1.25.7, full `make lint` (golangci-lint, govulncheck, commit validation, license checks, headers, YAML, shell).
 - **Test:** 4-platform matrix (ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025). Installs ffmpeg per platform. Runs `make test` (unit + race + bench + coverage).
 - **Build:** Same 4-platform matrix. `make build` + `make verify` (runs binary with `--version`).
 - Aggregation gates: `test-success` and `build-success` jobs require all matrix entries to pass.

@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"io"
 
-	goflac "github.com/mewkiz/flac"
-	"github.com/mewkiz/flac/frame"
-	"github.com/mewkiz/flac/meta"
+	goflac "github.com/mycophonic/flac"
+	"github.com/mycophonic/flac/frame"
+	"github.com/mycophonic/flac/meta"
 )
 
 var errPCMLengthMismatch = errors.New("pcm length is not a multiple of frame size")
