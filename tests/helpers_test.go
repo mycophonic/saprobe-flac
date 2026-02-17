@@ -19,12 +19,12 @@ package tests_test
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/mycophonic/agar/pkg/agar"
 
@@ -39,7 +39,18 @@ func decodeSaprobe(path string) ([]byte, flac.PCMFormat, error) {
 	}
 	defer f.Close()
 
-	return flac.Decode(f)
+	dec, decErr := flac.NewDecoder(f)
+	if decErr != nil {
+		return nil, flac.PCMFormat{}, decErr
+	}
+	defer dec.Close()
+
+	pcm, readErr := io.ReadAll(dec)
+	if readErr != nil {
+		return nil, flac.PCMFormat{}, readErr
+	}
+
+	return pcm, dec.Format(), nil
 }
 
 // encodeSaprobe encodes raw PCM to FLAC using saprobe's encoder.
@@ -134,57 +145,6 @@ func discoverFiles(t *testing.T, dir string) []string {
 
 // Benchmark infrastructure.
 
-const (
-	benchIterations = agar.DefaultBenchIterations
-	benchDuration   = 10 // seconds of audio
-)
+var benchOpts = agar.BenchOptions{}.WithDefaults() //nolint:gochecknoglobals
 
-// benchResult wraps agar.BenchResult with a string-based Format for simpler test code.
-type benchResult struct {
-	Format  string
-	Tool    string
-	Op      string
-	Median  time.Duration
-	Mean    time.Duration
-	Min     time.Duration
-	Max     time.Duration
-	Stddev  time.Duration
-	PCMSize int
-}
-
-func computeResult(format, tool, op string, durations []time.Duration, pcmSize int) benchResult {
-	r := agar.ComputeResult(agar.BenchFormat{Name: format}, tool, op, durations, pcmSize)
-
-	return benchResult{
-		Format:  format,
-		Tool:    r.Tool,
-		Op:      r.Op,
-		Median:  r.Median,
-		Mean:    r.Mean,
-		Min:     r.Min,
-		Max:     r.Max,
-		Stddev:  r.Stddev,
-		PCMSize: r.PCMSize,
-	}
-}
-
-func printResults(t *testing.T, results []benchResult) {
-	t.Helper()
-
-	agarResults := make([]agar.BenchResult, len(results))
-	for i, r := range results {
-		agarResults[i] = agar.BenchResult{
-			Format:  agar.BenchFormat{Name: r.Format},
-			Tool:    r.Tool,
-			Op:      r.Op,
-			Median:  r.Median,
-			Mean:    r.Mean,
-			Min:     r.Min,
-			Max:     r.Max,
-			Stddev:  r.Stddev,
-			PCMSize: r.PCMSize,
-		}
-	}
-
-	agar.PrintResults(t, agar.BenchOptions{Iterations: benchIterations}, agarResults)
-}
+const benchDuration = 10 // seconds of audio

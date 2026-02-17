@@ -222,9 +222,9 @@ Total allocated: 2.93 GB across 10 decode iterations.
 | Function                         | Flat      | Flat%  | Cum       | Cum%   |
 |----------------------------------|-----------|--------|-----------|--------|
 | bytes.growSlice                  | 2500 MB   | 85.26% | 2500 MB   | 85.26% |
-| flac.Decode                      | 400 MB    | 13.59% | 400 MB    | 13.59% |
+| io.ReadAll (Decoder.Read)        | 400 MB    | 13.59% | 400 MB    | 13.59% |
 
-`bytes.growSlice` (85%) is from subprocess I/O (flac/ffmpeg binary output capture), not saprobe decode. The only remaining saprobe decode allocation is `flac.Decode` (400 MB, output buffer assembly). `Frame.Parse` no longer appears as an allocation source.
+`bytes.growSlice` (85%) is from subprocess I/O (flac/ffmpeg binary output capture), not saprobe decode. The only remaining saprobe decode allocation is `io.ReadAll` via `Decoder.Read` (400 MB, output buffer assembly). `Frame.Parse` no longer appears as an allocation source.
 
 ## Mass testing
 

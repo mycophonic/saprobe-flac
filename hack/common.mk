@@ -31,6 +31,7 @@ ORG ?= github.com/mycophonic
 ALLOWED_LICENSES ?= Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT
 LICENSE_IGNORES ?=
 COVER_MIN ?= 0
+TEST_TIMEOUT ?= 10m
 
 # Auto-detect Go module presence.
 ifneq ($(wildcard $(PROJECT_DIR)/go.mod),)
@@ -78,7 +79,7 @@ all: clean lint ## Clean and lint everything
 endif
 
 ifeq ($(HAS_GO),true)
-test: unit ## Run all tests
+test: build unit ## Run all tests
 unit: test-unit test-unit-race test-unit-bench test-unit-cover ## Run unit tests
 else
 test: ## Run all tests
@@ -114,6 +115,27 @@ lint-go-all:
 		&& GOOS=windows $(MAKE) lint-go
 	$(call footer, $@)
 endif
+
+lint-go-bce: ## Report bounds check elimination failures
+	$(call title, $@)
+	@cd $(PROJECT_DIR) \
+		&& echo "Bounds Check Elimination Report" \
+		&& echo "================================" \
+		&& echo "" \
+		&& output=$$(go build -gcflags='-d=ssa/check_bce/debug=1' ./... 2>&1 | grep -v '^#' || true); \
+		if [ -z "$$output" ]; then \
+			echo "No bounds checks detected (BCE fully eliminated)."; \
+		else \
+			total=$$(echo "$$output" | wc -l | tr -d ' '); \
+			echo "Total: $$total bounds checks"; \
+			echo ""; \
+			echo "By file:"; \
+			echo "$$output" | sed 's/:.*$$//' | sort | uniq -c | sort -rn; \
+			echo ""; \
+			echo "Details:"; \
+			echo "$$output" | sort; \
+		fi
+	$(call footer, $@)
 
 lint-yaml:
 	$(call title, $@)
@@ -279,12 +301,12 @@ install-dev-tools: install-dev-gotestsum
 
 test-unit:
 	$(call title, $@)
-	@go test $(VERBOSE_FLAG) -count 1 $(PROJECT_DIR)/...
+	@go test $(VERBOSE_FLAG) -count 1 -timeout $(TEST_TIMEOUT) $(PROJECT_DIR)/...
 	$(call footer, $@)
 
 test-unit-bench:
 	$(call title, $@)
-	@go test $(VERBOSE_FLAG) -count 1 $(PROJECT_DIR)/... -bench=.
+	@go test $(VERBOSE_FLAG) -count 1 -timeout $(TEST_TIMEOUT) $(PROJECT_DIR)/... -bench=.
 	$(call footer, $@)
 
 # Force external linking for race tests. The race detector injects runtime/cgo
@@ -295,13 +317,20 @@ test-unit-bench:
 # with: runtime/cgo(.text): relocation target stderr not defined
 # Forcing -linkmode=external makes GCC perform the final link, resolving libc.
 #
+# Known warning (harmless): on macOS with Xcode 15+, Apple's ld-prime linker
+# emits "has malformed LC_DYSYMTAB" warnings during race builds. This is a
+# cosmetic issue in Go's Mach-O object generation — the produced binaries are
+# correct. The warning only appears with -race because the race detector
+# forces CGO and external linking.
+#
 # See:
 #   https://github.com/golang/go/issues/52690
 #   https://github.com/golang/go/issues/54313
 #   https://github.com/golang/go/issues/58619
+#   https://github.com/golang/go/issues/61229 (Apple ld-prime / LC_DYSYMTAB)
 test-unit-race:
 	$(call title, $@)
-	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) -ldflags="-linkmode=external" $(PROJECT_DIR)/... -race
+	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) -ldflags="-linkmode=external" -timeout $(TEST_TIMEOUT) $(PROJECT_DIR)/... -race
 	$(call footer, $@)
 
 PROF_DIR := $(PROJECT_DIR)/bin/profiles
@@ -343,13 +372,14 @@ COVER_DIR := $(PROJECT_DIR)/bin/coverage
 test-unit-cover: ## Run tests with coverage reporting
 	$(call title, $@)
 	@mkdir -p $(COVER_DIR)
-	@go test $(VERBOSE_FLAG) -count 1 -coverprofile="$(COVER_DIR)/coverage.out" $(PROJECT_DIR)/...
+	@go test $(VERBOSE_FLAG) -count 1 -timeout $(TEST_TIMEOUT) -coverprofile="$(COVER_DIR)/coverage.out" $(PROJECT_DIR)/...
 	@go tool cover -func="$(COVER_DIR)/coverage.out"
 	@go tool cover -html="$(COVER_DIR)/coverage.out" -o "$(COVER_DIR)/coverage.html" \
 		&& echo "HTML report: $(COVER_DIR)/coverage.html"
 	@if [ "$(COVER_MIN)" -gt 0 ] 2>/dev/null; then \
 		total=$$(go tool cover -func="$(COVER_DIR)/coverage.out" | grep ^total | awk '{print $$3}' | tr -d '%'); \
-		if [ "$$(echo "$$total < $(COVER_MIN)" | bc)" -eq 1 ]; then \
+		total_int=$${total%%.*}; \
+		if [ "$$total_int" -lt "$(COVER_MIN)" ]; then \
 			echo "Coverage $${total}% below minimum $(COVER_MIN)%"; exit 1; \
 		fi; \
 		echo "Coverage $${total}% meets minimum $(COVER_MIN)%"; \
@@ -365,7 +395,7 @@ test-unit-cover: ## Run tests with coverage reporting
 	unit \
 	init-dev init-dev-system \
 	install-dev-tools install-dev-gotestsum \
-	lint-commits lint-go lint-go-all lint-headers lint-licenses lint-licenses-all lint-mod lint-shell lint-vuln lint-yaml \
+	lint-commits lint-go lint-go-all lint-go-bce lint-headers lint-licenses lint-licenses-all lint-mod lint-shell lint-vuln lint-yaml \
 	fix-go fix-go-all fix-headers fix-mod \
 	test-unit test-unit-race test-unit-bench test-unit-cover test-unit-profile \
 	build build-debug build-static install verify clean
