@@ -124,8 +124,6 @@ linters:
     # MAYBE disable revive file-header
 
   disable:
-    # Until we upstream patches on flac
-    - gomoddirectives
     # These are the linters that we know we do not want
     - copyloopvar       # no longer needed after go 1.22
     - errchkjson        # forces handling of json err (eg: prevents _), which is too much
@@ -263,7 +261,7 @@ linters:
           allow:
             - $gostd
             - github.com/mycophonic/saprobe-flac
-            - github.com/mewkiz/flac
+            - github.com/mycophonic/flac
             - github.com/mycophonic/agar
 
     staticcheck:
