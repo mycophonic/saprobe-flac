@@ -266,7 +266,9 @@ func benchDecodeSaprobe(t *testing.T, bf agar.BenchFormat, srcPath string) agar.
 			}
 		}
 
-		dec.Close()
+		if closeErr := dec.Close(); closeErr != nil {
+			t.Fatalf("saprobe close: %v", closeErr)
+		}
 
 		durations[iter] = time.Since(start)
 	}
@@ -368,7 +370,9 @@ func TestBenchmarkDecodeFile(t *testing.T) {
 			}
 		}
 
-		dec.Close()
+		if closeErr := dec.Close(); closeErr != nil {
+			t.Fatalf("saprobe close: %v", closeErr)
+		}
 
 		durations[iter] = time.Since(start)
 	}

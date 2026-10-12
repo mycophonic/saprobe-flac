@@ -37,13 +37,13 @@ func decodeSaprobe(path string) ([]byte, flac.PCMFormat, error) {
 	if err != nil {
 		return nil, flac.PCMFormat{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec, decErr := flac.NewDecoder(f)
 	if decErr != nil {
 		return nil, flac.PCMFormat{}, decErr
 	}
-	defer dec.Close()
+	defer func() { _ = dec.Close() }()
 
 	pcm, readErr := io.ReadAll(dec)
 	if readErr != nil {
@@ -65,9 +65,16 @@ func encodeSaprobe(srcPCM []byte, dstPath string, bitDepth, sampleRate, channels
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	return flac.Encode(f, srcPCM, format)
+	// Encode closes f on success (the encoder's Close closes its writer and
+	// reports that error); only a failure before that leaves f open.
+	if encErr := flac.Encode(f, srcPCM, format); encErr != nil {
+		_ = f.Close()
+
+		return encErr
+	}
+
+	return nil
 }
 
 // flacBinaryEncode encodes raw PCM to FLAC using the standalone flac binary.

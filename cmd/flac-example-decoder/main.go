@@ -80,7 +80,7 @@ func run(outputFormat, inputPath string) int {
 
 		return 1
 	}
-	defer dec.Close()
+	defer func() { _ = dec.Close() }() // Close only forwards to the input, which cleanup owns.
 
 	pcmFormat := dec.Format()
 

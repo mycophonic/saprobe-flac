@@ -38,7 +38,7 @@ golangci:
         # annotated now carry `#nosec G115`, the ones they did not are here
         # until the alignment pass names them.
         - path: ^cmd/flac-example-decoder/main\.go$
-          linters: [errcheck, mnd, reassign]
+          linters: [mnd, reassign]
         - path: ^decode\.go$
           linters: [gocognit, gosec]
           text: cognitive complexity|G115
@@ -46,12 +46,10 @@ golangci:
           linters: [gocognit, gosec]
           text: cognitive complexity|G115
         - path: ^tests/benchmark_test\.go$
-          linters: [errcheck, gocritic]
-          text: Close|appendCombine
+          linters: [gocritic]
+          text: appendCombine
         - path: ^tests/conformance_test\.go$
           linters: [errname]
-        - path: ^tests/helpers_test\.go$
-          linters: [errcheck]
           # --- end of the onboarding backlog.
 licenses:
   allowed:
