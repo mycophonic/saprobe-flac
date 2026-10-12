@@ -108,6 +108,7 @@ func deinterleave(channels [][]int32, pcm []byte, offset, blockSize, nChannels i
 	case Depth4, Depth8:
 		for i := range blockSize {
 			for ch := range nChannels {
+				// #nosec G115 -- uint8-to-int8 reinterpretation.
 				channels[ch][i] = int32(int8(pcm[pos]))
 				pos++
 			}
