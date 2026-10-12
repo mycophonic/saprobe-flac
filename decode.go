@@ -103,6 +103,8 @@ func NewDecoder(rs io.ReadSeeker) (*Decoder, error) {
 func (d *Decoder) Format() PCMFormat { return d.format }
 
 // Read reads decoded PCM bytes from the FLAC stream.
+//
+//nolint:gocognit // one read loop; its branches are the stream's states (buffered, EOF, trailing garbage, next frame).
 func (d *Decoder) Read(p []byte) (int, error) {
 	total := 0
 
@@ -191,6 +193,8 @@ func (d *Decoder) Close() error {
 // Stereo paths use packed writes (PutUint32/PutUint64) to emit both channels per store
 // instruction, with bounds-check elimination (BCE) hints so the compiler removes all
 // per-iteration bounds checks from the inner loop.
+//
+//nolint:gocognit // the hot path: one case per PCM width, stereo packed inline; the branching is the output layouts'.
 func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels int, depth BitDepth) {
 	switch depth {
 	case Depth4, Depth8:
