@@ -28,7 +28,7 @@ import (
 	"github.com/mycophonic/flac/frame"
 )
 
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // the bit depths FLAC encodes, read-only
 var flacBitDepths = []BitDepth{
 	Depth4,
 	Depth8,
@@ -94,7 +94,7 @@ func NewDecoder(rs io.ReadSeeker) (*Decoder, error) {
 		format: PCMFormat{
 			SampleRate: int(info.SampleRate),
 			BitDepth:   bitDepth,
-			Channels:   uint(nChannels), //nolint:gosec // nChannels comes from uint8, always fits in uint.
+			Channels:   uint(nChannels),
 		},
 	}, nil
 }
@@ -103,7 +103,7 @@ func NewDecoder(rs io.ReadSeeker) (*Decoder, error) {
 func (d *Decoder) Format() PCMFormat { return d.format }
 
 // Read reads decoded PCM bytes from the FLAC stream.
-func (d *Decoder) Read(p []byte) (int, error) { //nolint:varnamelen // p is idiomatic for io.Reader.Read
+func (d *Decoder) Read(p []byte) (int, error) {
 	total := 0
 
 	for len(p) > 0 {
@@ -171,7 +171,7 @@ func (d *Decoder) Read(p []byte) (int, error) { //nolint:varnamelen // p is idio
 
 		interleave(d.buf, audioFrame.Subframes, blockSize, d.nChannels, d.bitDepth)
 		d.bufOff = 0
-		d.samplesRead += uint64(blockSize) //nolint:gosec // blockSize is always positive.
+		d.samplesRead += uint64(blockSize) // #nosec G115 -- blockSize is always positive.
 	}
 
 	return total, nil
@@ -191,8 +191,6 @@ func (d *Decoder) Close() error {
 // Stereo paths use packed writes (PutUint32/PutUint64) to emit both channels per store
 // instruction, with bounds-check elimination (BCE) hints so the compiler removes all
 // per-iteration bounds checks from the inner loop.
-//
-//revive:disable-next-line:cognitive-complexity // single switch over 5 bit-depth groups × stereo/multi paths; splitting hurts readability.
 func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels int, depth BitDepth) {
 	switch depth {
 	case Depth4, Depth8:
@@ -203,7 +201,7 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 			_ = dst[blockSize*2-1] // BCE
 
 			for i, l := range left {
-				//nolint:gosec // Intentional int32-to-uint16 packing.
+				// #nosec G115 -- Intentional int32-to-uint16 packing.
 				binary.LittleEndian.PutUint16(dst[i*2:], uint16(uint8(l))|uint16(uint8(right[i]))<<8)
 			}
 		} else {
@@ -211,7 +209,7 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 
 			for i := range blockSize {
 				for ch := range nChannels {
-					//nolint:gosec // G115: intentional int32→int8 truncation for 4/8-bit PCM sign extension.
+					// #nosec G115 -- intentional int32→int8 truncation for 4/8-bit PCM sign extension.
 					dst[pos] = byte(
 						int8(subframes[ch].Samples[i]),
 					)
@@ -228,7 +226,7 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 
 			for i, l := range left {
 				r := right[i]
-				//nolint:gosec // G115: intentional int32→uint16 truncation for 12/16-bit stereo PCM packing.
+				// #nosec G115 -- intentional int32→uint16 truncation for 12/16-bit stereo PCM packing.
 				binary.LittleEndian.PutUint32(dst[i*4:], uint32(uint16(l))|uint32(uint16(r))<<16)
 			}
 		} else {
@@ -254,7 +252,7 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 				rSample := right[i]
 				off := i * 6
 				// Pack first sample's 24 bits + second sample's low byte into one uint32.
-				//nolint:gosec // G115: intentional int32→uint8 truncation for 20/24-bit stereo PCM packing.
+				// #nosec G115 -- intentional int32→uint8 truncation for 20/24-bit stereo PCM packing.
 				binary.LittleEndian.PutUint32(
 					dst[off:],
 					uint32(uint8(lSample))|
@@ -286,7 +284,7 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 
 			for i, l := range left {
 				r := right[i]
-				//nolint:gosec // G115: intentional int32→uint32 reinterpretation for 32-bit stereo PCM packing.
+				// #nosec G115 -- intentional int32→uint32 reinterpretation for 32-bit stereo PCM packing.
 				binary.LittleEndian.PutUint64(dst[i*8:], uint64(uint32(l))|uint64(uint32(r))<<32)
 			}
 		} else {

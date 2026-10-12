@@ -29,7 +29,7 @@ import (
 	"github.com/mycophonic/agar/pkg/agar"
 )
 
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // a test flag, bound once at init
 var conformanceRepo = flag.String(
 	"conformance-repo", "",
 	"path to ietf-wg-cellar/flac-test-files clone (auto-downloaded if empty)",
@@ -199,7 +199,7 @@ func runSubsetTest(
 
 // uncommonSkips lists uncommon FLAC test files that saprobe cannot decode yet.
 //
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // the known skips, read-only test data
 var uncommonSkips = map[string]string{
 	"10 - file starting at frame header.flac": "headerless FLAC (no fLaC signature) not supported",
 }
@@ -334,8 +334,6 @@ func reportPCMDiff(t *testing.T, label string, got, want []byte, bitDepth, chann
 }
 
 // ensureConformanceRepo returns the path to the flac-test-files repository.
-//
-//nolint:cyclop // Sequential setup logic.
 func ensureConformanceRepo(t *testing.T) string {
 	t.Helper()
 
@@ -384,7 +382,7 @@ func ensureConformanceRepo(t *testing.T) string {
 	return repoDir
 }
 
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // the one-time conformance corpus setup
 var (
 	conformanceOnce sync.Once
 	conformanceErr  error

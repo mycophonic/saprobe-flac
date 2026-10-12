@@ -145,6 +145,6 @@ func discoverFiles(t *testing.T, dir string) []string {
 
 // Benchmark infrastructure.
 
-var benchOpts = agar.BenchOptions{}.WithDefaults() //nolint:gochecknoglobals
+var benchOpts = agar.BenchOptions{}.WithDefaults() //nolint:gochecknoglobals // shared benchmark options, read-only
 
 const benchDuration = 10 // seconds of audio
