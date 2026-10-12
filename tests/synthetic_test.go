@@ -47,19 +47,19 @@ const (
 
 // All encodable FLAC bit depths (4-bit excluded: no frame header bit pattern in FLAC spec).
 //
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // the test matrix, read-only test data
 var bitDepths = []int{8, 12, 16, 20, 24, 32}
 
 // sampleRates covers the full range of commonly used sample rates.
 //
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // the test matrix, read-only test data
 var sampleRates = []int{
 	8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000,
 }
 
 // channelCounts covers all FLAC-supported channel counts (1 through 8).
 //
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // the test matrix, read-only test data
 var channelCounts = []int{1, 2, 3, 4, 5, 6, 7, 8}
 
 // encodersForBitDepth returns which encoders support the given bit depth.
@@ -165,7 +165,6 @@ func TestConformance(t *testing.T) {
 	}
 }
 
-//nolint:cyclop // Test orchestration requires many steps.
 func runConformanceTest(
 	t *testing.T,
 	enc encoderType,

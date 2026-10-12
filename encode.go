@@ -38,7 +38,7 @@ const (
 // Encode writes interleaved little-endian signed PCM bytes as a FLAC stream to writer.
 // It is the inverse of Decode.
 func Encode(writer io.Writer, pcm []byte, format PCMFormat) error {
-	nChannels := int(format.Channels) //nolint:gosec // Channels is 1-8, fits int.
+	nChannels := int(format.Channels)
 	bytesPerSample := format.BitDepth.BytesPerSample()
 	frameSize := nChannels * bytesPerSample
 
@@ -51,10 +51,10 @@ func Encode(writer io.Writer, pcm []byte, format PCMFormat) error {
 	info := &meta.StreamInfo{
 		BlockSizeMin:  defaultBlockSize,
 		BlockSizeMax:  defaultBlockSize,
-		SampleRate:    uint32(format.SampleRate), //nolint:gosec // SampleRate is always positive and fits uint32.
-		NChannels:     uint8(nChannels),          //nolint:gosec // Channels is 1-8, fits uint8.
-		BitsPerSample: uint8(format.BitDepth),    //nolint:gosec // BitDepth is 4-32, fits uint8.
-		NSamples:      uint64(totalSamples),      //nolint:gosec // totalSamples is always positive.
+		SampleRate:    uint32(format.SampleRate), // #nosec G115 -- SampleRate is always positive and fits uint32.
+		NChannels:     uint8(nChannels),          // #nosec G115 -- Channels is 1-8, fits uint8.
+		BitsPerSample: uint8(format.BitDepth),    // #nosec G115 -- BitDepth is 4-32, fits uint8.
+		NSamples:      uint64(totalSamples),      // #nosec G115 -- totalSamples is always positive.
 	}
 
 	enc, err := goflac.NewEncoder(writer, info)
@@ -115,7 +115,7 @@ func deinterleave(channels [][]int32, pcm []byte, offset, blockSize, nChannels i
 	case Depth12, Depth16:
 		for i := range blockSize {
 			for ch := range nChannels {
-				//nolint:gosec // uint16-to-int16 reinterpretation.
+				// #nosec G115 -- uint16-to-int16 reinterpretation.
 				channels[ch][i] = int32(int16(binary.LittleEndian.Uint16(pcm[pos:])))
 				pos += 2
 			}
@@ -136,7 +136,7 @@ func deinterleave(channels [][]int32, pcm []byte, offset, blockSize, nChannels i
 	case Depth32:
 		for i := range blockSize {
 			for ch := range nChannels {
-				channels[ch][i] = int32( //nolint:gosec // uint32-to-int32 reinterpretation.
+				channels[ch][i] = int32( // #nosec G115 -- uint32-to-int32 reinterpretation.
 					binary.LittleEndian.Uint32(pcm[pos:]),
 				)
 				pos += 4
@@ -150,7 +150,7 @@ func deinterleave(channels [][]int32, pcm []byte, offset, blockSize, nChannels i
 // buildFrame constructs a FLAC frame from per-channel int32 samples.
 func buildFrame(channels [][]int32, blockSize int, format PCMFormat) *frame.Frame {
 	nChannels := len(channels)
-	chanAssignment := frame.Channels(nChannels - 1) //nolint:gosec // nChannels is 1-8, always >= 1.
+	chanAssignment := frame.Channels(nChannels - 1) // #nosec G115 -- nChannels is 1-8, always >= 1.
 
 	subframes := make([]*frame.Subframe, nChannels)
 	for ch := range nChannels {
@@ -166,10 +166,10 @@ func buildFrame(channels [][]int32, blockSize int, format PCMFormat) *frame.Fram
 	return &frame.Frame{
 		Header: frame.Header{
 			HasFixedBlockSize: true,
-			BlockSize:         uint16(blockSize),         //nolint:gosec // blockSize <= 4096, fits uint16.
-			SampleRate:        uint32(format.SampleRate), //nolint:gosec // SampleRate is always positive.
+			BlockSize:         uint16(blockSize),         // #nosec G115 -- blockSize <= 4096, fits uint16.
+			SampleRate:        uint32(format.SampleRate), // #nosec G115 -- SampleRate is always positive.
 			Channels:          chanAssignment,
-			BitsPerSample:     uint8(format.BitDepth), //nolint:gosec // BitDepth is 4-32, fits uint8.
+			BitsPerSample:     uint8(format.BitDepth), // #nosec G115 -- BitDepth is 4-32, fits uint8.
 		},
 		Subframes: subframes,
 	}

@@ -31,7 +31,7 @@ import (
 	flac "github.com/mycophonic/saprobe-flac"
 )
 
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // the benchmark matrix, read-only test data
 var benchFormats = []agar.BenchFormat{
 	{Name: "CD 44.1kHz/16bit", SampleRate: 44100, BitDepth: 16, Channels: 2},
 	{Name: "HiRes 96kHz/24bit", SampleRate: 96000, BitDepth: 24, Channels: 2},

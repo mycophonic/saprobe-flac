@@ -19,8 +19,6 @@
 // Usage:
 //
 //	flac-example-decoder [-format wav|pcm] <input.flac | ->
-//
-//nolint:gosec // Integer conversions are bounded by audio format constraints; file paths from CLI args.
 package main
 
 import (
@@ -125,7 +123,7 @@ func openInput(path string) (io.ReadSeeker, func(), error) {
 		return bytes.NewReader(data), func() {}, nil
 	}
 
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- the path is the command line's argument
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("opening %s: %w", path, err)
 	}
@@ -156,20 +154,38 @@ func writeWAV(writer io.Writer, pcm []byte, pcmFmt flac.PCMFormat) error {
 	var hdr [44]byte
 
 	copy(hdr[0:4], "RIFF")
-	binary.LittleEndian.PutUint32(hdr[4:8], uint32(36+dataSize))
+	binary.LittleEndian.PutUint32(
+		hdr[4:8],
+		uint32(36+dataSize),
+	) // #nosec G115 -- bounded by the audio format constraints
 	copy(hdr[8:12], "WAVE")
 
 	copy(hdr[12:16], "fmt ")
 	binary.LittleEndian.PutUint32(hdr[16:20], 16)
 	binary.LittleEndian.PutUint16(hdr[20:22], 1) // PCM
-	binary.LittleEndian.PutUint16(hdr[22:24], uint16(pcmFmt.Channels))
-	binary.LittleEndian.PutUint32(hdr[24:28], uint32(pcmFmt.SampleRate))
-	binary.LittleEndian.PutUint32(hdr[28:32], uint32(byteRate))
-	binary.LittleEndian.PutUint16(hdr[32:34], uint16(blockAlign))
+	binary.LittleEndian.PutUint16(
+		hdr[22:24],
+		uint16(pcmFmt.Channels),
+	) // #nosec G115 -- bounded by the audio format constraints
+	binary.LittleEndian.PutUint32(
+		hdr[24:28],
+		uint32(pcmFmt.SampleRate),
+	) // #nosec G115 -- bounded by the audio format constraints
+	binary.LittleEndian.PutUint32(
+		hdr[28:32],
+		uint32(byteRate),
+	) // #nosec G115 -- bounded by the audio format constraints
+	binary.LittleEndian.PutUint16(
+		hdr[32:34],
+		uint16(blockAlign),
+	) // #nosec G115 -- bounded by the audio format constraints
 	binary.LittleEndian.PutUint16(hdr[34:36], uint16(bitsPerSample))
 
 	copy(hdr[36:40], "data")
-	binary.LittleEndian.PutUint32(hdr[40:44], uint32(dataSize))
+	binary.LittleEndian.PutUint32(
+		hdr[40:44],
+		uint32(dataSize),
+	) // #nosec G115 -- bounded by the audio format constraints
 
 	if _, err := writer.Write(hdr[:]); err != nil {
 		return fmt.Errorf("writing WAV header: %w", err)
