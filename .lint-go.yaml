@@ -45,8 +45,6 @@ golangci:
         - path: ^encode\.go$
           linters: [gocognit, gosec]
           text: cognitive complexity|G115
-        - path: ^tests/conformance_test\.go$
-          linters: [errname]
           # --- end of the onboarding backlog.
 licenses:
   allowed:

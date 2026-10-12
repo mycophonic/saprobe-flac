@@ -354,7 +354,7 @@ func ensureConformanceRepo(t *testing.T) string {
 
 		gitBin, err := exec.LookPath("git")
 		if err != nil {
-			conformanceErr = fmt.Errorf("git not found: %w", err)
+			errConformance = fmt.Errorf("git not found: %w", err)
 
 			return
 		}
@@ -362,7 +362,7 @@ func ensureConformanceRepo(t *testing.T) string {
 		t.Logf("cloning %s into %s", conformanceRepoURL, repoDir)
 
 		if mkErr := os.MkdirAll(filepath.Dir(repoDir), 0o755); mkErr != nil {
-			conformanceErr = fmt.Errorf("mkdir: %w", mkErr)
+			errConformance = fmt.Errorf("mkdir: %w", mkErr)
 
 			return
 		}
@@ -371,12 +371,12 @@ func ensureConformanceRepo(t *testing.T) string {
 		cmd.Stderr = os.Stderr
 
 		if cloneErr := cmd.Run(); cloneErr != nil {
-			conformanceErr = fmt.Errorf("git clone: %w", cloneErr)
+			errConformance = fmt.Errorf("git clone: %w", cloneErr)
 		}
 	})
 
-	if conformanceErr != nil {
-		t.Skipf("could not download IETF FLAC test files: %v", conformanceErr)
+	if errConformance != nil {
+		t.Skipf("could not download IETF FLAC test files: %v", errConformance)
 	}
 
 	return repoDir
@@ -385,5 +385,5 @@ func ensureConformanceRepo(t *testing.T) string {
 //nolint:gochecknoglobals // the one-time conformance corpus setup
 var (
 	conformanceOnce sync.Once
-	conformanceErr  error
+	errConformance  error
 )
