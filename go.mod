@@ -1,6 +1,6 @@
 module github.com/mycophonic/saprobe-flac
 
-go 1.25.7
+go 1.26.0
 
 require (
 	github.com/mycophonic/agar v0.1.6
