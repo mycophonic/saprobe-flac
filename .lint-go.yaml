@@ -38,7 +38,7 @@ golangci:
         # annotated now carry `#nosec G115`, the ones they did not are here
         # until the alignment pass names them.
         - path: ^cmd/flac-example-decoder/main\.go$
-          linters: [mnd, reassign]
+          linters: [mnd]
         - path: ^decode\.go$
           linters: [gocognit, gosec]
           text: cognitive complexity|G115
