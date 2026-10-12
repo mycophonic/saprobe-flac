@@ -108,9 +108,11 @@ func TestBenchmarkDecode(t *testing.T) {
 
 		t.Logf("  PCM size: %.1f MB (%d bytes)", float64(len(srcPCM))/(1024*1024), len(srcPCM))
 
-		results = append(results, benchDecodeSaprobe(t, bf, encPath))
-		results = append(results, benchDecodeFlacBin(t, bf, flacBin, encPath))
-		results = append(results, benchDecodeFFmpeg(t, bf, encPath))
+		results = append(results,
+			benchDecodeSaprobe(t, bf, encPath),
+			benchDecodeFlacBin(t, bf, flacBin, encPath),
+			benchDecodeFFmpeg(t, bf, encPath),
+		)
 
 		// CoreAudio decode (CGO, in-process). CoreAudio does not support 32-bit FLAC.
 		if bf.BitDepth == 16 || bf.BitDepth == 24 {
@@ -390,10 +392,11 @@ func TestBenchmarkDecodeFile(t *testing.T) {
 		results = append(results, benchDecodeFlacBin(t, bf, flacBin, tmpFile))
 	}
 
-	results = append(results, benchDecodeFFmpeg(t, bf, tmpFile))
-
-	// CoreAudio decode (CGO, in-process).
-	results = append(results, agar.BenchDecodeCoreAudio(t, bf, benchOpts, encoded))
+	// ffmpeg decode, then CoreAudio decode (CGO, in-process).
+	results = append(results,
+		benchDecodeFFmpeg(t, bf, tmpFile),
+		agar.BenchDecodeCoreAudio(t, bf, benchOpts, encoded),
+	)
 
 	agar.PrintResults(t, benchOpts, results)
 }
