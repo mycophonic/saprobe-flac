@@ -95,7 +95,7 @@ func Encode(writer io.Writer, pcm []byte, format PCMFormat) error {
 // deinterleave reads interleaved little-endian signed PCM bytes into pre-allocated
 // per-channel int32 slices. It is the inverse of interleave in decode.go.
 //
-//nolint:varnamelen // Loop variables i, ch, s are idiomatic.
+//nolint:gocognit // the inverse of interleave: one case per PCM width; the branching is the input layouts'.
 func deinterleave(channels [][]int32, pcm []byte, offset, blockSize, nChannels int, depth BitDepth) {
 	// Reslice to exact block size (channels were allocated at max block size).
 	for ch := range channels {
@@ -123,6 +123,7 @@ func deinterleave(channels [][]int32, pcm []byte, offset, blockSize, nChannels i
 		}
 	case Depth20, Depth24:
 		for i := range blockSize {
+			//nolint:varnamelen // Loop variables ch, s are idiomatic.
 			for ch := range nChannels {
 				s := int32(pcm[pos]) | int32(pcm[pos+1])<<8 | int32(pcm[pos+2])<<16
 				// Sign-extend from 24-bit.

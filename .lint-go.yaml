@@ -25,25 +25,6 @@ golangci:
             - noctx # no cancellation to propagate
             - perfsprint # readability over allocations
             - mnd # fixture values
-
-        # --- ONBOARDING BACKLOG (book/mandatory-files.md, "Onboarding an
-        # existing repository"). Findings the baseline raised on enrolment and
-        # nobody has read yet: not decisions, exemptions to be emptied, one
-        # linter or one package per alignment pull request, each finding then
-        # fixed, silenced inline with its reason, or raised as a rule. The last
-        # alignment pull request deletes this block.
-        #
-        # gosec G115 in decode.go and encode.go: the PCM packing paths truncate
-        # int32 samples to the output width on purpose; the sites the authors
-        # annotated now carry `#nosec G115`, the ones they did not are here
-        # until the alignment pass names them.
-        - path: ^decode\.go$
-          linters: [gocognit]
-          text: cognitive complexity
-        - path: ^encode\.go$
-          linters: [gocognit]
-          text: cognitive complexity
-          # --- end of the onboarding backlog.
 licenses:
   allowed:
     # The baseline's list, plus Unlicense: mycophonic/flac keeps mewkiz/flac's
