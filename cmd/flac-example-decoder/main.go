@@ -33,7 +33,16 @@ import (
 	"github.com/mycophonic/saprobe-flac/version"
 )
 
-const formatWAV = "wav"
+const (
+	formatWAV = "wav"
+
+	// wavHeaderSize is the canonical PCM WAV header: the RIFF chunk header,
+	// the WAVE tag, the fmt chunk and the data chunk header.
+	wavHeaderSize = 44
+	// riffHeaderSize is the RIFF tag and size field, which the RIFF chunk
+	// size does not count.
+	riffHeaderSize = 8
+)
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -151,12 +160,12 @@ func writeWAV(writer io.Writer, pcm []byte, pcmFmt flac.PCMFormat) error {
 		// No adjustment needed for standard depths.
 	}
 
-	var hdr [44]byte
+	var hdr [wavHeaderSize]byte
 
 	copy(hdr[0:4], "RIFF")
 	binary.LittleEndian.PutUint32(
 		hdr[4:8],
-		uint32(36+dataSize),
+		uint32(wavHeaderSize-riffHeaderSize+dataSize),
 	) // #nosec G115 -- bounded by the audio format constraints
 	copy(hdr[8:12], "WAVE")
 
