@@ -103,6 +103,8 @@ func NewDecoder(rs io.ReadSeeker) (*Decoder, error) {
 func (d *Decoder) Format() PCMFormat { return d.format }
 
 // Read reads decoded PCM bytes from the FLAC stream.
+//
+//nolint:gocognit // one read loop; its branches are the stream's states (buffered, EOF, trailing garbage, next frame).
 func (d *Decoder) Read(p []byte) (int, error) {
 	total := 0
 
@@ -191,6 +193,8 @@ func (d *Decoder) Close() error {
 // Stereo paths use packed writes (PutUint32/PutUint64) to emit both channels per store
 // instruction, with bounds-check elimination (BCE) hints so the compiler removes all
 // per-iteration bounds checks from the inner loop.
+//
+//nolint:gocognit // the hot path: one case per PCM width, stereo packed inline; the branching is the output layouts'.
 func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels int, depth BitDepth) {
 	switch depth {
 	case Depth4, Depth8:
@@ -235,8 +239,8 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 			for i := range blockSize {
 				for ch := range nChannels {
 					s := subframes[ch].Samples[i]
-					dst[pos] = byte(s)
-					dst[pos+1] = byte(s >> 8)
+					dst[pos] = byte(s)        // #nosec G115 -- int32-to-uint8 truncation for 12/16-bit PCM packing.
+					dst[pos+1] = byte(s >> 8) // #nosec G115 -- int32-to-uint8 truncation for 12/16-bit PCM packing.
 					pos += 2
 				}
 			}
@@ -260,8 +264,8 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 						uint32(uint8(lSample>>16))<<16|
 						uint32(uint8(rSample))<<24,
 				)
-				dst[off+4] = byte(rSample >> 8)
-				dst[off+5] = byte(rSample >> 16)
+				dst[off+4] = byte(rSample >> 8)  // #nosec G115 -- int32-to-uint8 truncation for 20/24-bit stereo PCM.
+				dst[off+5] = byte(rSample >> 16) // #nosec G115 -- int32-to-uint8 truncation for 20/24-bit stereo PCM.
 			}
 		} else {
 			pos := 0
@@ -269,9 +273,9 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 			for i := range blockSize {
 				for ch := range nChannels {
 					s := subframes[ch].Samples[i]
-					dst[pos] = byte(s)
-					dst[pos+1] = byte(s >> 8)
-					dst[pos+2] = byte(s >> 16)
+					dst[pos] = byte(s)         // #nosec G115 -- int32-to-uint8 truncation for 20/24-bit PCM packing.
+					dst[pos+1] = byte(s >> 8)  // #nosec G115 -- int32-to-uint8 truncation for 20/24-bit PCM packing.
+					dst[pos+2] = byte(s >> 16) // #nosec G115 -- int32-to-uint8 truncation for 20/24-bit PCM packing.
 					pos += 3
 				}
 			}
@@ -293,10 +297,10 @@ func interleave(dst []byte, subframes []*frame.Subframe, blockSize, nChannels in
 			for i := range blockSize {
 				for ch := range nChannels {
 					s := subframes[ch].Samples[i]
-					dst[pos] = byte(s)
-					dst[pos+1] = byte(s >> 8)
-					dst[pos+2] = byte(s >> 16)
-					dst[pos+3] = byte(s >> 24)
+					dst[pos] = byte(s)         // #nosec G115 -- int32-to-uint8 truncation for 32-bit PCM packing.
+					dst[pos+1] = byte(s >> 8)  // #nosec G115 -- int32-to-uint8 truncation for 32-bit PCM packing.
+					dst[pos+2] = byte(s >> 16) // #nosec G115 -- int32-to-uint8 truncation for 32-bit PCM packing.
+					dst[pos+3] = byte(s >> 24) // #nosec G115 -- int32-to-uint8 truncation for 32-bit PCM packing.
 					pos += 4
 				}
 			}

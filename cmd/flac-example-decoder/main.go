@@ -30,7 +30,6 @@ import (
 	"os"
 
 	flac "github.com/mycophonic/saprobe-flac"
-	"github.com/mycophonic/saprobe-flac/version"
 )
 
 const (
@@ -44,6 +43,11 @@ const (
 	riffHeaderSize = 8
 )
 
+// version is the build's stamp: the shared build recipe sets it from `git describe`
+// through -X main.version; a plain `go build` leaves "dev". gochecknoglobals
+// exempts the name for this use.
+var version = "dev"
+
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
 	outputFormat := flag.String("format", formatWAV, "output format: wav or pcm")
@@ -56,7 +60,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Fprintln(os.Stdout, version.String())
+		fmt.Fprintln(os.Stdout, "flac-example-decoder", version)
 		os.Exit(0)
 	}
 
