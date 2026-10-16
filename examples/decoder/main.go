@@ -14,11 +14,11 @@
    limitations under the License.
 */
 
-// flac-example-decoder decodes a FLAC file to WAV or raw PCM on stdout.
+// decoder decodes a FLAC file to WAV or raw PCM on stdout.
 //
 // Usage:
 //
-//	flac-example-decoder [-format wav|pcm] <input.flac | ->
+//	decoder [-format wav|pcm] <input.flac | ->
 package main
 
 import (
@@ -43,7 +43,7 @@ const (
 	riffHeaderSize = 8
 )
 
-// version is the build's stamp: the shared build recipe sets it from `git describe`
+// version is the build's stamp: the build recipe sets it from `git describe`
 // through -X main.version; a plain `go build` leaves "dev". gochecknoglobals
 // exempts the name for this use.
 var version = "dev"
@@ -60,7 +60,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Fprintln(os.Stdout, "flac-example-decoder", version)
+		fmt.Fprintln(os.Stdout, "decoder", version)
 		os.Exit(0)
 	}
 
