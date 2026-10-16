@@ -10,9 +10,10 @@ require (
 require (
 	github.com/containerd/nerdctl/mod/tigron v0.0.0-20260212081135-61a62f37ccbf // indirect
 	github.com/creack/pty v1.1.24 // indirect
-	github.com/mycophonic/primordium v0.2.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	github.com/forkcloser/xos v0.1.0 // indirect
+	github.com/mycophonic/primordium v0.15.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
