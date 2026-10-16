@@ -7,7 +7,7 @@ Date: 2026-02-03
 Every file in the repository was reviewed:
 
 **Library code:** `doc.go`, `decode.go` (275 LOC), `encode.go` (157 LOC), `format.go` (44 LOC)
-**CLI:** `cmd/flac-example-decoder/main.go` (171 LOC)
+**CLI:** `examples/decoder/main.go` (171 LOC)
 **Version:** `version/version.go` (32 LOC)
 **Tests:** `tests/conformance_test.go` (376 LOC), `tests/synthetic_test.go` (312 LOC), `tests/benchmark_test.go` (387 LOC), `tests/helpers_test.go` (175 LOC)
 **CI:** `.github/workflows/ci.yml`, `.github/workflows/go-latest.yml`
