@@ -1,15 +1,11 @@
 .DS_Store
-.idea
-_*
+.idea/
 bin
-tmp
-third-party
-generated
 
 # Required by limen (book/mandatory-files.md, ".gitignore").
 /build
 /_scratch
-.claude
+.claude/
 
 # Required by limen (book/mandatory-files.md, ".gitignore").
 /.build
