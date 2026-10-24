@@ -106,7 +106,10 @@ func TestReadIsTheSameWhateverTheBuffer(t *testing.T) {
 
 	path, source := sineFile(t, flacBin, true)
 
-	for _, size := range []int{1, 2, 3, 4, 5, 1000, 4095 * 4, 4096 * 4, 4097 * 4, 1 << 20} {
+	// The sizes include the two that make the last Read deliver exactly one
+	// byte, and one byte short of everything, where an off-by-one at the end
+	// would drop or invent a byte.
+	for _, size := range []int{1, 2, 3, 4, 5, 1000, 4095 * 4, 4096 * 4, 4097 * 4, 1 << 20, len(source) - 1, len(source) + 1} {
 		file, err := os.Open(path)
 		if err != nil {
 			t.Fatal(err)
@@ -148,6 +151,36 @@ func TestReadIsTheSameWhateverTheBuffer(t *testing.T) {
 
 		_ = dec.Close()
 		_ = file.Close()
+	}
+}
+
+// decodeBytesWith decodes a stream held in memory through reads of size
+// bytes, the last read's count included in what comes back.
+func decodeBytesWith(data []byte, size int) ([]byte, error) {
+	dec, err := flac.NewDecoder(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = dec.Close() }()
+
+	var out []byte
+
+	buf := make([]byte, size)
+
+	for {
+		n, err := dec.Read(buf)
+		out = append(out, buf[:n]...)
+
+		// The bare io.EOF, as io.ReadAll takes it: a refusal that wraps
+		// io.EOF is not a clean end.
+		if err == io.EOF { //nolint:errorlint // the end is the bare sentinel, by io.Reader's contract
+			return out, nil
+		}
+
+		if err != nil {
+			return out, err
+		}
 	}
 }
 
@@ -298,6 +331,19 @@ func TestStreamEdgesAgainstTheReference(t *testing.T) {
 				t.Fatalf("%d bytes, want %d", len(got), len(c.want))
 			}
 
+			// The same through reads that leave one byte for the last one, and
+			// through one read that takes everything so the next starts on the
+			// trailing bytes with nothing in hand: where an end after trailing
+			// bytes is most easily off by one.
+			if c.want != nil {
+				for _, size := range []int{len(c.want) - 1, len(c.want)} {
+					sized, err := decodeBytesWith(c.data, size)
+					if err != nil || !bytes.Equal(sized, c.want) {
+						t.Fatalf("through %d-byte reads: %d bytes, %v", size, len(sized), err)
+					}
+				}
+			}
+
 			// Where the reference decodes, it decodes the same.
 			path := filepath.Join(t.TempDir(), "case.flac")
 			if err := os.WriteFile(path, c.data, 0o600); err != nil {
@@ -311,5 +357,42 @@ func TestStreamEdgesAgainstTheReference(t *testing.T) {
 
 			t.Logf("reference: %v", refErr == nil)
 		})
+	}
+}
+
+// closeFailing is a source whose Close fails; the decoder's Close must say
+// so.
+type closeFailing struct{ *bytes.Reader }
+
+var errSourceClose = errors.New("the source would not close")
+
+func (closeFailing) Close() error { return errSourceClose }
+
+func TestCloseReportsTheSourcesFailure(t *testing.T) {
+	t.Parallel()
+
+	flacBin, err := exec.LookPath("flac")
+	if err != nil {
+		t.Skip("no reference flac on the PATH")
+	}
+
+	path, _ := sineFile(t, flacBin, true)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dec, err := flac.NewDecoder(closeFailing{bytes.NewReader(data)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := io.ReadAll(dec); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := dec.Close(); !errors.Is(err, errSourceClose) {
+		t.Fatalf("Close: %v, want the source's failure", err)
 	}
 }
