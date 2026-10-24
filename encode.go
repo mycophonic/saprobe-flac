@@ -27,7 +27,18 @@ import (
 	"github.com/mycophonic/flac/meta"
 )
 
-var errPCMLengthMismatch = errors.New("pcm length is not a multiple of frame size")
+var (
+	errPCMLengthMismatch = errors.New("pcm length is not a multiple of frame size")
+
+	// ErrFormat is returned by Encode for a PCMFormat the stream cannot
+	// carry: a bit depth FLAC does not encode, a channel count outside 1
+	// to 8, or a sample rate of zero. The encoder refuses a rate above the
+	// header's 655350 Hz on its own.
+	ErrFormat = errors.New("invalid PCM format")
+)
+
+// maxChannels is the channel count FLAC's frame header can name.
+const maxChannels = 8
 
 const (
 	defaultBlockSize = 4096
@@ -38,6 +49,21 @@ const (
 // Encode writes interleaved little-endian signed PCM bytes as a FLAC stream to writer.
 // It is the inverse of Decode.
 func Encode(writer io.Writer, pcm []byte, format PCMFormat) error {
+	// The format first: the frame size below is computed from it, and a
+	// depth FLAC does not encode or a channel count of zero would panic
+	// there rather than return.
+	if !format.BitDepth.Valid() {
+		return fmt.Errorf("%w: %w: %d", ErrFormat, ErrBitDepth, format.BitDepth)
+	}
+
+	if format.Channels < 1 || format.Channels > maxChannels {
+		return fmt.Errorf("%w: %d channels", ErrFormat, format.Channels)
+	}
+
+	if format.SampleRate <= 0 {
+		return fmt.Errorf("%w: sample rate %d", ErrFormat, format.SampleRate)
+	}
+
 	nChannels := int(format.Channels)
 	bytesPerSample := format.BitDepth.BytesPerSample()
 	frameSize := nChannels * bytesPerSample

@@ -32,6 +32,17 @@ const (
 	Depth32 BitDepth = 32
 )
 
+// Valid reports whether the depth is one FLAC encodes: 4, 8, 12, 16, 20,
+// 24 or 32 bits.
+func (d BitDepth) Valid() bool {
+	switch d {
+	case Depth4, Depth8, Depth12, Depth16, Depth20, Depth24, Depth32:
+		return true
+	default:
+		return false
+	}
+}
+
 // BytesPerSample returns the number of bytes needed to store one sample.
 // Sub-byte depths (4-bit) are stored in 1 byte (sign-extended).
 // 12-bit samples are stored in 2 bytes (sign-extended to 16-bit).

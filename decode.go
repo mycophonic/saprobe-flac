@@ -70,6 +70,10 @@ type Decoder struct {
 // NewDecoder opens a FLAC stream and returns a streaming decoder.
 // The caller should call Close when done.
 func NewDecoder(rs io.ReadSeeker) (*Decoder, error) {
+	if rs == nil {
+		return nil, fmt.Errorf("%w: nil reader", ErrReadFailure)
+	}
+
 	stream, err := goflac.New(rs)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrReadFailure, err)
