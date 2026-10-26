@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"runtime"
 	"testing"
 
 	flac "github.com/mycophonic/saprobe-flac"
@@ -59,7 +60,46 @@ func FuzzDecoder(f *testing.F) {
 	f.Add([]byte("fLaC"))
 	f.Add([]byte("ID3"))
 
+	// Silence: 16 MiB of 8-channel 32-bit zeros, a few kilobytes of stream,
+	// the ratio the allocation bound must have room for.
+	var silence bytes.Buffer
+	if err := flac.Encode(
+		&silence,
+		make([]byte, 16<<20),
+		flac.PCMFormat{SampleRate: 48000, BitDepth: flac.Depth32, Channels: 8},
+	); err != nil {
+		f.Fatal(err)
+	}
+
+	f.Add(silence.Bytes())
+
 	f.Fuzz(func(t *testing.T, data []byte) {
+		// What a decode allocates is bounded by the input and the output,
+		// not by the lengths the stream declares: the frame buffers of the
+		// widest block, a modest multiple of the bytes read, and the PCM
+		// collected (FLAC turns a few kilobytes of silence into megabytes,
+		// and io.ReadAll grows by doubling).
+		var decoded int
+
+		var before runtime.MemStats
+
+		runtime.ReadMemStats(&before)
+
+		defer func() {
+			if raceEnabled {
+				return
+			}
+
+			var after runtime.MemStats
+
+			runtime.ReadMemStats(&after)
+
+			bound := uint64(16<<20) + 64*uint64(len(data)) + 4*uint64(decoded)
+			if got := after.TotalAlloc - before.TotalAlloc; got > bound {
+				t.Fatalf("decoding %d bytes into %d allocated %d bytes (bound %d)", len(data), decoded, got, bound)
+			}
+		}()
+
 		dec, err := flac.NewDecoder(bytes.NewReader(data))
 		if err != nil {
 			if !errors.Is(err, flac.ErrReadFailure) && !errors.Is(err, flac.ErrBitDepth) {
@@ -83,6 +123,8 @@ func FuzzDecoder(f *testing.F) {
 		const limit = 32 << 20
 
 		pcm, err := io.ReadAll(io.LimitReader(dec, limit))
+		decoded = len(pcm)
+
 		if err != nil && !errors.Is(err, flac.ErrReadFailure) {
 			t.Fatalf("Read failed outside the contract: %v", err)
 		}
