@@ -12,7 +12,7 @@ For a full-blown cli, see [Saprobe](https://github.com/mycophonic/saprobe).
 
 - **Bit depths:** 4, 8, 12, 16, 20, 24, 32
 - **Channels:** 1-8 (mono through 7.1 surround)
-- **Sample rates:** any valid uint32; tested at 8000-192000 Hz (11 rates)
+- **Sample rates:** any valid uint32
 - **Output:** interleaved little-endian signed PCM
 
 | Bit Depth | Bytes/Sample | Notes      |

@@ -19,85 +19,10 @@ package tests_test
 import (
 	"bytes"
 	"fmt"
-	"io"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
 
 	"github.com/mycophonic/agar/pkg/agar"
-
-	flac "github.com/mycophonic/saprobe-flac"
 )
-
-// decodeSaprobe decodes a FLAC file using the saprobe decoder.
-func decodeSaprobe(path string) ([]byte, flac.PCMFormat, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, flac.PCMFormat{}, err
-	}
-	defer func() { _ = f.Close() }()
-
-	dec, decErr := flac.NewDecoder(f)
-	if decErr != nil {
-		return nil, flac.PCMFormat{}, decErr
-	}
-	defer func() { _ = dec.Close() }()
-
-	pcm, readErr := io.ReadAll(dec)
-	if readErr != nil {
-		return nil, flac.PCMFormat{}, readErr
-	}
-
-	return pcm, dec.Format(), nil
-}
-
-// encodeSaprobe encodes raw PCM to FLAC using saprobe's encoder.
-func encodeSaprobe(srcPCM []byte, dstPath string, bitDepth, sampleRate, channels int) error {
-	format := flac.PCMFormat{
-		SampleRate: sampleRate,
-		BitDepth:   flac.BitDepth(bitDepth),
-		Channels:   uint(channels),
-	}
-
-	f, err := os.Create(dstPath)
-	if err != nil {
-		return err
-	}
-
-	// Encode closes f on success (the encoder's Close closes its writer and
-	// reports that error); only a failure before that leaves f open.
-	if encErr := flac.Encode(f, srcPCM, format); encErr != nil {
-		_ = f.Close()
-
-		return encErr
-	}
-
-	return nil
-}
-
-// flacBinaryEncode encodes raw PCM to FLAC using the standalone flac binary.
-func flacBinaryEncode(flacBin, srcPath, dstPath string, bitDepth, sampleRate, channels int) error {
-	cmd := exec.Command(flacBin,
-		"-f",
-		"--force-raw-format",
-		"--sign=signed",
-		"--endian=little",
-		fmt.Sprintf("--channels=%d", channels),
-		fmt.Sprintf("--bps=%d", bitDepth),
-		fmt.Sprintf("--sample-rate=%d", sampleRate),
-		"-o", dstPath,
-		srcPath,
-	)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("flac encode: %w\n%s", err, output)
-	}
-
-	return nil
-}
 
 // flacBinaryDecodeRaw decodes a FLAC file to raw PCM using the standalone flac binary.
 func flacBinaryDecodeRaw(flacBin, srcPath string) ([]byte, error) {
@@ -120,34 +45,6 @@ func flacBinaryDecodeRaw(flacBin, srcPath string) ([]byte, error) {
 	}
 
 	return stdout.Bytes(), nil
-}
-
-// discoverFiles returns all .flac files in the given directory, sorted by name.
-func discoverFiles(t *testing.T, dir string) []string {
-	t.Helper()
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("reading %s: %v", dir, err)
-	}
-
-	var files []string
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		if strings.HasSuffix(entry.Name(), ".flac") {
-			files = append(files, filepath.Join(dir, entry.Name()))
-		}
-	}
-
-	if len(files) == 0 {
-		t.Fatalf("no .flac files found in %s", dir)
-	}
-
-	return files
 }
 
 // Benchmark infrastructure.

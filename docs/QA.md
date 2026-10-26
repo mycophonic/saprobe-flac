@@ -1,135 +1,19 @@
 # Testing FLAC
 
-## Conformance (`TestConformance`)
-
-Round-trip encode/decode tests across all supported bit depth, sample rate, channel count, and encoder/decoder combinations. Subtests are named `{bitDepth}bit/{encoder}/{sampleRate}Hz_{channels}ch`.
+The codec is tested where it lives: [mycophonic/flac](https://github.com/mycophonic/flac)
+holds the IETF conformance sets against the reference decoder and ffmpeg, the
+encoder and decoder matrices with a sample-rate row, the seek matrix, the
+hostile tables, a random damage sweep, the fuzz targets and the differential
+harness (the ffmpeg leg, the sample rates and the damage sweep arrived with
+mycophonic/flac#66, the pair of this change). This repository tests the layer it
+adds: the Read contract whatever the buffer, the stream's end to the byte,
+Close reporting the source's failure, the narrow depths' PCM packing, Encode
+refusing what it cannot write, the example decoder's exit codes, a fuzz
+target on the decoder, and the benchmarks below.
 
 ```bash
-# Full suite (all tools)
 make test
-
-# Conformance only
-go test ./tests/ -run TestConformance -count=1 -v
-
-# Single subtest
-go test ./tests/ -run TestConformance/16bit/saprobe/44100Hz_2ch -count=1 -v
 ```
-
-**Test matrix:**
-
-- **Bit depths:** 8, 12, 16, 20, 24, 32
-- **Sample rates:** 8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000
-- **Channels:** 1-8
-
-Each encoder produces an encoded file which is decoded by all compatible decoders. Decoded output is compared against the original source PCM and cross-compared across decoders.
-
-Total: 1057 sub-tests, all passing.
-
-**Encoder/decoder support by bit depth:**
-
-| Bit Depth | Encoders                   | Decoders                   |
-|-----------|----------------------------|----------------------------|
-| 8         | saprobe, flac              | saprobe, flac, ffmpeg      |
-| 12        | saprobe                    | saprobe                    |
-| 16        | saprobe, flac, ffmpeg      | saprobe, flac, ffmpeg      |
-| 20        | saprobe                    | saprobe                    |
-| 24        | saprobe, flac, ffmpeg      | saprobe, flac, ffmpeg      |
-| 32        | saprobe, flac              | saprobe, flac, ffmpeg      |
-
-4-bit encoding is not supported by any encoder. The FLAC spec allows 4-bit in StreamInfo but has no frame header bit pattern for it (the "011" slot is reserved). 4-bit is excluded from the test matrix.
-
-The reference `flac` binary can decode all bit depths internally, but `--force-raw-format` output only supports 8, 16, 24, and 32-bit. It rejects 12-bit and 20-bit raw output, making byte-exact comparison impossible for those depths via the CLI.
-
-**Verification:**
-
-- Mono and stereo: bit-for-bit PCM match against source, plus cross-decoder comparison.
-- Multichannel (3-8ch): ffmpeg's FLAC decoder applies channel layout remapping for certain bit depth/channel combinations, causing byte-order differences vs the flac binary and saprobe. These known cases are skipped for ffmpeg cross-comparison; saprobe and the flac binary are always compared.
-
-**ffmpeg multichannel remapping (skipped configurations):**
-
-| Channels | saprobe | flac binary | ffmpeg decode (8-bit) | ffmpeg decode (16-bit) | ffmpeg decode (24-bit) | ffmpeg decode (32-bit) |
-|----------|---------|-------------|-----------------------|------------------------|------------------------|------------------------|
-| 1        | Pass    | Pass        | Pass                  | Pass                   | Pass                   | Pass                   |
-| 2        | Pass    | Pass        | Pass                  | Pass                   | Pass                   | Pass                   |
-| 3        | Pass    | Pass        | Skipped               | Skipped                | Skipped                | Skipped                |
-| 4        | Pass    | Pass        | Skipped               | Skipped                | Skipped                | Skipped                |
-| 5        | Pass    | Pass        | Pass                  | Pass                   | Skipped                | Skipped                |
-| 6        | Pass    | Pass        | Pass                  | Pass                   | Skipped                | Skipped                |
-| 7        | Pass    | Pass        | Pass                  | Skipped                | Skipped                | Pass                   |
-| 8        | Pass    | Pass        | Pass                  | Skipped                | Skipped                | Pass                   |
-
-**Reference tools:**
-
-| Tool   | Role            | Bit Depths     | Notes                                         |
-|--------|-----------------|----------------|-----------------------------------------------|
-| flac   | Encode + Decode | 8, 16, 24, 32  | Reference C implementation (xiph.org)         |
-| ffmpeg | Encode + Decode | 16, 24         | Uses libavcodec FLAC encoder/decoder          |
-
-Both tools are optional; tests skip gracefully when unavailable.
-
-## IETF Conformance (`TestIETFConformance`)
-
-Runs the [IETF FLAC decoder testbench](https://github.com/ietf-wg-cellar/flac-test-files) against three decoders: the reference flac binary, ffmpeg, and saprobe.
-
-```bash
-go test ./tests/ -run TestIETFConformance -count=1 -v
-
-# With local clone
-go test ./tests/ -run TestIETFConformance -conformance-repo=/path/to/flac-test-files -count=1 -v
-```
-
-The conformance repo is auto-downloaded if not specified. Three categories:
-
-- **subset:** Standard files that must decode identically across all three decoders.
-- **uncommon:** Best-effort decoding; no crash expected.
-- **faulty:** Must not crash; decoder errors are expected.
-
-### Subset (mandatory compliance)
-
-Files that every conforming decoder must handle correctly. saprobe is compared byte-for-byte against the reference `flac` binary and ffmpeg (where available).
-
-| File | Status | Notes |
-|------|--------|-------|
-| 01-21, 23-36, 38-60, 61, 63-64 | Pass | Byte-exact match with reference |
-| 22 (12-bit per sample) | Pass (saprobe) | Reference `flac` binary cannot produce 12-bit raw output; comparison skipped |
-| 37 (20-bit per sample) | Pass (saprobe) | Reference `flac` binary cannot produce 20-bit raw output; comparison skipped |
-| 62 (predictor overflow, 20-bit) | Pass (saprobe) | Reference `flac` binary cannot produce 20-bit raw output; comparison skipped |
-
-### Uncommon (best-effort)
-
-Files with unusual properties. Both decoders may legitimately fail; the test verifies saprobe doesn't crash and matches the reference when both succeed.
-
-| File | Status | Notes |
-|------|--------|-------|
-| 01 (changing samplerate) | Pass | Both decoders fail (acceptable) |
-| 02 (increasing channels) | Pass | Both decoders reject (channel count validation) |
-| 03 (decreasing channels) | Pass | Both decoders reject (channel count validation) |
-| 04 (changing bitdepth) | Pass | Both decoders reject (bit depth validation) |
-| 05 (32bps audio) | Pass | Byte-exact match with reference |
-| 06 (768kHz samplerate) | Pass | Both succeed, match |
-| 07 (15-bit per sample) | Pass | Both succeed, match |
-| 08 (blocksize 65535) | Pass | Both succeed, match |
-| 09 (Rice partition order 15) | Pass | Both succeed, match |
-| 10 (file starting at frame header) | Skipped | No fLaC signature; headerless FLAC not supported (see Open Issues) |
-| 11 (unparsable leading data) | Pass | Both decoders fail (acceptable) |
-
-### Faulty (must not crash)
-
-Files with intentional errors. The decoder must return an error or at least not crash.
-
-| File | Status | Notes |
-|------|--------|-------|
-| 01 (wrong max blocksize) | Pass (no crash) | Metadata-only error; audio frames are valid, decoder succeeds |
-| 02 (wrong max framesize) | Pass (no crash) | Metadata-only error; audio frames are valid, decoder succeeds |
-| 03 (wrong bit depth) | Pass | Correctly rejected (bit depth mismatch) |
-| 04 (wrong channel count) | Pass | Correctly rejected (channel count mismatch) |
-| 05 (wrong total samples) | Pass | Correctly rejected (sample count overflow) |
-| 06 (missing streaminfo) | Pass | Correctly rejected |
-| 07 (metadata before streaminfo) | Pass | Correctly rejected |
-| 08 (blocksize 65536) | Pass | Correctly rejected |
-| 09 (blocksize 1) | Pass | Correctly rejected |
-| 10 (invalid vorbis comment) | Pass (no crash) | Metadata-only error; audio frames are valid, decoder succeeds |
-| 11 (incorrect metadata block length) | Pass | Correctly rejected (invalid block type from garbage header) |
 
 ## Benchmarks
 
