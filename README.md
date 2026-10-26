@@ -44,6 +44,9 @@ Other dependencies (agar) are purely for test tooling.
 
 ## Detailed documentation
 
-* [decoders landscape](./docs/research/DECODERS.md)
-* [encoders landscape](./docs/research/ENCODERS.md)
 * [tests and benchmarks](./docs/QA.md)
+* [implementation notes](./docs/IMPLEMENTATION.md)
+
+The codec's own notes (decoder and encoder landscapes, the decoder's
+performance work) live with the codec, under
+[mycophonic/flac/docs](https://github.com/mycophonic/flac/tree/main/docs).
