@@ -113,11 +113,3 @@ Total allocated: 2.93 GB across 10 decode iterations.
 ## Mass testing
 
 Comparative decoding is being done on a set of 6049 FLAC files from the Anisotope collection. Distribution is predominantly CD quality (44.1kHz/16bit stereo) with some hi-res (96kHz/24bit, 192kHz/24bit) vinyl rips.
-
-## Open issues
-
-### Feature gap
-
-1. **uncommon/10 — file starting at frame header (no fLaC signature).**
-
-The file contains valid FLAC frames but no `fLaC` magic bytes or StreamInfo metadata block. The flac library requires the signature in `parseStreamInfo()`. Supporting headerless FLAC streams would require a new entry point that accepts StreamInfo parameters externally (sample rate, channels, bit depth) and starts parsing frames directly. Low priority — this is an uncommon edge case not required by the FLAC specification.
