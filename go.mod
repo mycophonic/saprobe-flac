@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/mycophonic/agar v0.1.6
-	github.com/mycophonic/flac v1.0.0-rc2.0.20261026074435-7a1783b18c62
+	github.com/mycophonic/flac v1.0.0-rc2.0.20261029074624-64220dbaf036
 )
 
 require (
